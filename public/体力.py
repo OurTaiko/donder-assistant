@@ -9,11 +9,8 @@ def find_segments(arr):
             current_sum += arr[j]
             if current_sum >= 20000:
                 # 检查是否满足条件：加上前一个元素时还小于20000
-                if j > i:
-                    prev_sum = sum(arr[i:j])
-                else:
-                    prev_sum = 0
-                    
+                # 直接用累加值推导，避免 O(n) 的 sum(arr[i:j])
+                prev_sum = current_sum - arr[j]
                 if prev_sum < 20000:
                     segments.append((i, j, current_sum))
                 break

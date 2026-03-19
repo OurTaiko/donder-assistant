@@ -29,39 +29,25 @@ def calculate_rhythm_difficulty(arr, T):
                 marks[i] = 'R'
         
         def process_with_right_hand(input_array, input_marks):
-            arr_copy = input_array.copy()
-            marks_copy = input_marks.copy()
-            i = 0
-            
-            while i < len(arr_copy):
-                if marks_copy[i] == 'R':
-                    i += 1
+            # O(n)：L 元素合并到前一个 R 元素
+            result = []
+            for val, mark in zip(input_array, input_marks):
+                if mark == 'L' and result:
+                    result[-1] += val
                 else:
-                    if i > 0:
-                        arr_copy[i-1] = arr_copy[i-1] + arr_copy[i]
-                        arr_copy.pop(i)
-                        marks_copy.pop(i)
-            
-            return arr_copy
+                    result.append(val)
+            return result
         
         def process_with_left_hand(input_array, input_marks):
-            arr_copy = input_array.copy()
-            marks_copy = input_marks.copy()
-            i = 0
-            
-            while i < len(arr_copy):
-                if marks_copy[i] == 'L':
-                    i += 1
+            # O(n)：R 元素合并到前一个 L 元素，首位 R 直接丢弃
+            result = []
+            for val, mark in zip(input_array, input_marks):
+                if mark == 'R':
+                    if result:
+                        result[-1] += val
                 else:
-                    if i > 0:
-                        arr_copy[i-1] = arr_copy[i-1] + arr_copy[i]
-                        arr_copy.pop(i)
-                        marks_copy.pop(i)
-                    else:
-                        arr_copy.pop(i)
-                        marks_copy.pop(i)
-            
-            return arr_copy
+                    result.append(val)
+            return result
         
         result_r = process_with_right_hand(a, marks)
         result_l = process_with_left_hand(a, marks)
@@ -159,82 +145,39 @@ def compute_final_rhythm_difficulty(arr):
     t0 = t_high
     tm = t_low
     
-    print(f"阈值范围: ({tm:.2f}, {t0:.2f}) 开区间")
-    print(f"t0 = {t0:.2f}, tm = {tm:.2f}")
-    
-    # 检查数组中是否有介于(tm, t0)之间的数（不包含两端）
-    candidate_values = []
-    for value in arr:
-        if tm < value < t0:  # 修改为严格大于tm且严格小于t0
-            candidate_values.append(value)
-    
-    # 去重并排序
-    candidate_values = sorted(list(set(candidate_values)), reverse=True)
+    candidate_values = sorted(set(v for v in arr if tm < v < t0), reverse=True)
     
     if not candidate_values:
-        # 没有介于中间的数，使用t0
-        print("数组中不存在严格介于(tm, t0)之间的数")
-        print(f"使用T = t0 = {t0:.2f}")
         difficulty, ratio, l_arr, r_arr = calculate_rhythm_difficulty(arr, t0)
-        return difficulty, ratio, t0, l_arr, r_arr
+        return difficulty, ratio
     
-    # 有介于中间的数，执行加权计算
-    print(f"找到严格介于(tm, t0)之间的数: {candidate_values}")
-    
-    # 步骤1: 将所有符合条件的数与t0从大到小排列
     T_values = [t0] + candidate_values
-    print(f"T值列表: {[f'{t:.2f}' for t in T_values]}")
     
-    # 步骤2: 计算每个T值对应的节奏难度之和
-    difficulties = []
-    for i, T in enumerate(T_values):
-        difficulty, _, l_arr, r_arr = calculate_rhythm_difficulty(arr, T)
-        difficulties.append(difficulty)
-        print(f"T={T:.2f}时的节奏难度之和: {difficulty:.6f}")
+    difficulties = [calculate_rhythm_difficulty(arr, T)[0] for T in T_values]
     
-    # 步骤3: 计算权重（修改为1/B-1/A的形式）
-    weights = []
-    for i in range(len(T_values) - 1):
-        A = T_values[i]
-        B = T_values[i + 1]
-        weight = 1/B - 1/A
-        weights.append(weight)
-    
-    # 最后一个权重: 1/tm - 1/tn
+    weights = [1/T_values[i+1] - 1/T_values[i] for i in range(len(T_values) - 1)]
     weights.append(1/tm - 1/T_values[-1])
     
-    print(f"权重列表: {[f'{w:.6f}' for w in weights]}")
-    
-    # 验证所有权重之和等于1/tm - 1/t0
     total_weight = sum(weights)
-    expected_total = 1/tm - 1/t0
-    print(f"权重总和: {total_weight:.6f}, 期望值(1/tm-1/t0): {expected_total:.6f}")
     
-    # 步骤4: 计算加权几何平均值
     if total_weight <= 0:
-        # 如果所有权重非正，则返回第一个难度值
         weighted_geometric = difficulties[0]
     else:
-        # 计算加权几何平均值
         weighted_sum_log = 0
+        all_positive = True
         for i, difficulty in enumerate(difficulties):
-            if difficulty > 0:  # 只处理正数
+            if difficulty > 0:
                 weighted_sum_log += math.log(difficulty) * weights[i]
             else:
-                # 如果难度为0或负数，几何平均数为0
+                all_positive = False
                 weighted_geometric = 0
                 break
-        else:
-            # 如果所有难度都为正数
+        if all_positive:
             weighted_geometric = math.exp(weighted_sum_log / total_weight)
     
-    # 步骤5: 计算节奏难占比
     final_ratio = weighted_geometric / len(arr) if len(arr) > 0 else 0
     
-    print(f"加权几何平均节奏难度之和: {weighted_geometric:.6f}")
-    print(f"最终节奏难占比: {final_ratio:.6f}")
-    
-    return weighted_geometric, final_ratio, "加权几何平均", None, None
+    return weighted_geometric, final_ratio
 
 
 # 测试函数

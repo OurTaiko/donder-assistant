@@ -1,17 +1,12 @@
 {
   "name": "taiko-rating-calculator",
-  "version": "1.0.0",
-  "description": "太鼓达人谱面难度计算器 - Electron App",
-  "main": "main.js",
+  "version": "2.0.0",
+  "description": "太鼓达人谱面难度计算器 - Web 版本",
+  "type": "module",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev",
-    "icon": "node generate-icon.js",
-    "prebuild": "npm run icon",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac",
-    "build:linux": "electron-builder --linux"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "keywords": [
     "taiko",
@@ -20,58 +15,12 @@
   ],
   "author": "Your Name",
   "license": "MIT",
+  "dependencies": {},
   "devDependencies": {
-    "electron": "^41.0.3",
-    "electron-builder": "^26.8.1",
-    "png-to-ico": "^2.1.8",
-    "sharp": "^0.34.5"
+    "vite": "^5.0.0",
+    "terser": "^5.26.0"
   },
-  "build": {
-    "appId": "com.taiko.rating.calculator",
-    "productName": "定数计算器",
-    "directories": {
-      "output": "dist"
-    },
-    "asar": true,
-    "files": [
-      "main.js",
-      "lib/**/*.js",
-      "renderer/**/*",
-      "package.json",
-      "icon.ico"
-    ],
-    "extraResources": [
-      {
-        "from": "data",
-        "to": "data"
-      }
-    ],
-    "electronLanguages": [
-      "en-US",
-      "zh-CN"
-    ],
-    "win": {
-      "target": [
-        "portable"
-      ],
-      "icon": "icon.ico"
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "icon.ico"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "icon": "icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

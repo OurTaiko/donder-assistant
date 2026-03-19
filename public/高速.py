@@ -1,4 +1,4 @@
-import numpy as np
+import math
 
 def compute_weighted_average(a):
     """
@@ -17,7 +17,8 @@ def compute_weighted_average(a):
     
     # 3. 对c排序并计算排名 (从1开始，不重复排名)
     # 先得到排序后的索引: 从小到大排序
-    sorted_indices = np.argsort(c)  # 从小到大排序的原始索引
+    # 不使用 numpy，改用纯 Python 排序
+    sorted_indices = sorted(range(len(c)), key=lambda i: c[i])
     
     # 初始化排名数组
     rank = [0] * n
@@ -34,7 +35,7 @@ def compute_weighted_average(a):
             w.append(0.0)
         else:
             # w_i = 0.5 + sin(5*pi*p_i - 17/4*pi) + 0.5
-            w_i = 1.0 + np.sin(5 * np.pi * p_i - 17/4 * np.pi)
+            w_i = 1.0 + math.sin(5 * math.pi * p_i - 17/4 * math.pi)
             w.append(w_i)
     
     # 6. 计算加权平均值

@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+public/assets/data/*.json
+.env
+.env.local
+
+# Build/cache artifacts
+.vite/
+coverage/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
