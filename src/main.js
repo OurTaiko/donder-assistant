@@ -124,36 +124,73 @@ function normalizeSongJson(songData) {
   return normalized;
 }
 
-function extractSongMeta(relativePath, fileName) {
+function extractTjaTitle(content) {
+  if (!content || typeof content !== 'string') return '';
+  const match = content.match(/^\s*TITLE\s*:\s*(.+)\s*$/im);
+  return match ? match[1].trim() : '';
+}
+
+function extractTjaGenre(content) {
+  if (!content || typeof content !== 'string') return '';
+  const match = content.match(/^\s*GENRE\s*:\s*(.+)\s*$/im);
+  return match ? match[1].trim() : '';
+}
+
+function extractSongMeta(relativePath, fileName, preferredSongName = '', preferredCategory = '') {
   const segments = (relativePath || '').split('/').filter(Boolean);
   const fileBaseName = fileName.replace(/\.(json|tja)$/i, '');
+  const resolvedSongName = preferredSongName || fileBaseName;
+  const resolvedCategory = preferredCategory || (segments.length >= 3 ? segments[segments.length - 3] : '用户导入');
 
   if (segments.length >= 3) {
     return {
-      category: segments[segments.length - 3],
-      songName: segments[segments.length - 2] || fileBaseName
+      category: resolvedCategory,
+      songName: resolvedSongName || segments[segments.length - 2] || fileBaseName
     };
   }
 
   if (segments.length >= 2) {
     return {
-      category: '用户导入',
-      songName: segments[segments.length - 2] || fileBaseName
+      category: resolvedCategory,
+      songName: resolvedSongName || segments[segments.length - 2] || fileBaseName
     };
   }
 
   return {
-    category: '用户导入',
-    songName: fileBaseName
+    category: resolvedCategory,
+    songName: resolvedSongName
   };
+}
+
+function decodeBytesWithFallback(bytes, encodings) {
+  for (const encoding of encodings) {
+    try {
+      const decoder = new TextDecoder(encoding, { fatal: true });
+      return decoder.decode(bytes);
+    } catch (_) {
+      // try next encoding
+    }
+  }
+  throw new Error('无法识别文件编码');
 }
 
 function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onload = () => {
+      try {
+        const bytes = new Uint8Array(reader.result);
+        const isTja = file.name.toLowerCase().endsWith('.tja');
+        const text = isTja
+          ? decodeBytesWithFallback(bytes, ['utf-8', 'shift_jis'])
+          : decodeBytesWithFallback(bytes, ['utf-8']);
+        resolve(text);
+      } catch (error) {
+        reject(new Error(`读取文件失败: ${file.name}（${error.message}）`));
+      }
+    };
     reader.onerror = () => reject(new Error(`读取文件失败: ${file.name}`));
-    reader.readAsText(file, 'utf-8');
+    reader.readAsArrayBuffer(file);
   });
 }
 
@@ -245,12 +282,17 @@ async function parseSongEntries(fileEntries, onProgress) {
     }
 
     const { file, relativePath } = chartFiles[i];
+    const isJsonFile = file.name.toLowerCase().endsWith('.json');
     try {
       const text = await readFileAsText(file);
       let data;
+      let preferredSongName = '';
+      let preferredCategory = '';
 
       if (file.name.toLowerCase().endsWith('.tja')) {
         data = analyzeTjaToJson(text);
+        preferredSongName = extractTjaTitle(text);
+        preferredCategory = extractTjaGenre(text);
       } else {
         data = JSON.parse(text);
       }
@@ -258,14 +300,20 @@ async function parseSongEntries(fileEntries, onProgress) {
       data = normalizeSongJson(data);
 
       if (!isValidSongJson(data)) {
-        errors.push(`${relativePath}: 缺少 courses 字段或格式不正确`);
+        // 非谱面 JSON（如配置/元数据）静默跳过
+        if (!isJsonFile) {
+          errors.push(`${relativePath}: 缺少 courses 字段或格式不正确`);
+        }
         continue;
       }
 
-      const { category, songName } = extractSongMeta(relativePath, file.name);
+      const { category, songName } = extractSongMeta(relativePath, file.name, preferredSongName, preferredCategory);
       songs.push({ category, songName, data });
     } catch (error) {
-      errors.push(`${relativePath}: ${error.message}`);
+      // 非谱面 JSON 解析失败时静默跳过，避免干扰批量导入
+      if (!isJsonFile) {
+        errors.push(`${relativePath}: ${error.message}`);
+      }
     }
   }
 
@@ -273,7 +321,7 @@ async function parseSongEntries(fileEntries, onProgress) {
   showLoading(`已读取 ${songs.length} 首歌曲，准备计算...`);
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  if (!songs.length) {
+  if (!songs.length && errors.length) {
     const detail = errors.slice(0, 8).join('\n');
     throw new Error(`导入的谱面文件均无效。\n\n${detail}`);
   }
@@ -296,6 +344,14 @@ async function handleImportedEntries(fileEntries, sourceLabel) {
   const importedSongs = await parseSongEntries(fileEntries, (current, total) => {
     updateProgress(current, total);
   });
+
+  if (!importedSongs.length) {
+    // 本次导入未发现可计算谱面，静默结束（无关 JSON 已被忽略）
+    hideLoading();
+    progressContainer.classList.add('hidden');
+    return;
+  }
+
   allSongsData = importedSongs;
   await runCalculation(importedSongs, sourceLabel);
 }
