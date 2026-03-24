@@ -76,8 +76,17 @@ def calculate_rhythm_difficulty(arr, T):
                 smaller = min(ai, ai_prev)
                 ratio = larger / smaller
                 N = ratio - int(ratio)  # 取小数部分
-            
-            a_coeff = 2 * math.sqrt(0.25 - (0.5 - N) ** 2)
+
+            # a_coeff = 2 * math.sqrt(0.25 - (0.5 - N) ** 2)
+        
+            # 修改1: 将N赋值为N和1-N中的较小值
+            N = min(N, 1 - N)
+        
+            # 修改2: 根据N值使用不同的计算公式
+            if N < 1/3:
+                a_coeff = 2 * math.sqrt(0.25 - (0.5 * (1 - 3 * N)) ** 2)
+            else:
+                a_coeff = 2 * math.sqrt(0.25 - (0.9 * (1 - 3 * N)) ** 2)
             
             # 计算b系数（大间隔修正系数乘积）
             def get_interval_coeff(value):
@@ -97,14 +106,28 @@ def calculate_rhythm_difficulty(arr, T):
             b_coeff = b_coeff_prev * b_coeff_current
             
             # 计算c系数（馅蜜修正系数）
+
             def get_filling_coeff(value):
-                if value >= 100:
+                # 计算阈值
+                upper_threshold = 30 / 225 * 1000
+                lower_threshold = 30 / 375 * 1000
+    
+                if value >= upper_threshold:
                     return 1.0
-                elif value <= 50:
+                elif value <= lower_threshold:
                     return 0.0
                 else:
                     # 线性插值
-                    return (value - 50) / 50
+                    return (value - lower_threshold) / (upper_threshold - lower_threshold)
+        
+            # def get_filling_coeff(value):
+            #     if value >= 100:
+            #         return 1.0
+            #     elif value <= 50:
+            #         return 0.0
+            #     else:
+            #         # 线性插值
+            #         return (value - 50) / 50
             
             c_coeff = get_filling_coeff(ai)
             

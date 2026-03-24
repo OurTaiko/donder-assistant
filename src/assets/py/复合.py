@@ -33,6 +33,7 @@ def calculate_compound_difficulty(an: List[float], bn: List[int], T: float) -> f
     
     # 步骤3-10: 提取子数组并计算复合难度
     total_compound_difficulty = 0.0
+    subarray_difficulties = []  # 存储所有子数组的原始难度
     current_index = 0
     
     while current_index < n:
@@ -129,18 +130,66 @@ def calculate_compound_difficulty(an: List[float], bn: List[int], T: float) -> f
                 corr2 = 0.0
             
             b = corr1 * corr2
+
+            # 新增: 步骤8: 计算系数c
+            # 1. 获取当前元素的LR标记
+            current_lr_mark = lr_marks[idx_i]  # 通过原始索引获取LR标记
+
+            c = 1.0  # 默认值
+
+            # 当前元素的标记必须为"L"才进行详细计算
+            # if current_lr_mark == 'L':
+            
+            # 2. 计算阈值边界
+            lower_limit = 1 / (30/180 * 1000)
+            upper_limit = 1 / (30/300 * 1000)
+            value_to_check = 1 / an_extended[idx_i-1]  # 当前元素前一个位置的值
+            
+            # 3. 根据 value_to_check 与阈值的关系计算c
+            if value_to_check > upper_limit:
+                c = 1.0
+            elif value_to_check < lower_limit:
+                c = 0.0
+            else:
+                # 线性插值
+                c = (value_to_check - lower_limit) / (upper_limit - lower_limit)
+
             
             # 计算当前元素的复合难度
-            element_difficulty = a * b
+            element_difficulty = a * b * c
             subarray_compound_difficulty += element_difficulty
         
-        # 步骤8: 乘以ln(子数组长度)
-      #  if subarray_compound_difficulty > 0:
-      #      subarray_compound_difficulty *= math.log(subarray_len)
+        # if subarray_compound_difficulty > 0:
+            # subarray_compound_difficulty *= math.log(subarray_len)
+            # subarray_compound_difficulty *= subarray_len
+            # subarray_compound_difficulty *= subarray_compound_difficulty  #  放大长段的影响
         
-        total_compound_difficulty += subarray_compound_difficulty
+        # total_compound_difficulty += subarray_compound_difficulty
+
+        subarray_difficulties.append(subarray_compound_difficulty)
         current_index = subarray_indices[-1] + 1
+
+    # total_compound_difficulty = math.sqrt(total_compound_difficulty)
+
+    if len(subarray_difficulties) > 0:
+    # 计算所有子数组难度的总和
+        sum_of_difficulties = sum(subarray_difficulties)
+
+        # 计算子数组难度的方差
+        if len(subarray_difficulties) > 1:
+            # 计算平均值
+            mean_difficulty = sum_of_difficulties / len(subarray_difficulties)
+            # 计算方差
+            variance = sum((diff - mean_difficulty) ** 2 for diff in subarray_difficulties) / len(subarray_difficulties)
+        else:
+            # 如果只有一个子数组，方差为0
+            variance = 0.0
     
+        # 计算总难度
+        total_compound_difficulty = sum_of_difficulties + 0 * math.sqrt(variance)  #  不需要方差了
+    else:
+        total_compound_difficulty = 0.0
+        
     return total_compound_difficulty
 
 def calculate_complete_compound_difficulty(an: List[float], bn: List[int]) -> Tuple[float, float]:
