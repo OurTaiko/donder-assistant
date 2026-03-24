@@ -22,6 +22,11 @@ const errorModal = document.getElementById('errorModal');
 const errorModalTitle = document.getElementById('errorModalTitle');
 const errorModalMessage = document.getElementById('errorModalMessage');
 const errorModalCloseBtn = document.getElementById('errorModalCloseBtn');
+const gapModal = document.getElementById('gapModal');
+const gapModalTitle = document.getElementById('gapModalTitle');
+const gapModalStats = document.getElementById('gapModalStats');
+const gapModalBody = document.getElementById('gapModalBody');
+const gapModalCloseBtn = document.getElementById('gapModalCloseBtn');
 
 // 应用状态
 let allResults = [];
@@ -437,6 +442,98 @@ function formatNumber(num) {
   return num.toFixed(2);
 }
 
+function findGapData(songIndex, difficulty, branchType) {
+  const song = allSongsData[songIndex];
+  if (!song?.data?.courses) return null;
+  const course = song.data.courses[difficulty];
+  if (!course) return null;
+  const key = branchType || 'unbranched';
+  if (course[key] && Array.isArray(course[key])) return course[key];
+  for (const sideData of Object.values(course)) {
+    if (sideData && typeof sideData === 'object' && !Array.isArray(sideData) && Array.isArray(sideData[key])) {
+      return sideData[key];
+    }
+  }
+  return null;
+}
+
+function getGapColorClass(gap) {
+  if (gap === null) return 'gap-null';
+  if (gap <= 80) return 'gap-fast';
+  if (gap <= 150) return 'gap-medium';
+  if (gap <= 300) return 'gap-normal';
+  return 'gap-slow';
+}
+
+function renderGapContent(gapData) {
+  if (!gapData) return null;
+
+  let html = '';
+  let totalNotes = 0;
+  let totalGap = 0;
+  let gapCount = 0;
+  let minGap = Infinity;
+
+  for (let i = 0; i < gapData.length; i++) {
+    const bar = gapData[i];
+    if (!bar || bar.length === 0) continue;
+    totalNotes += bar.length;
+
+    html += '<div class="gap-bar">';
+    html += `<span class="gap-bar-label">${i + 1}</span>`;
+    for (const gap of bar) {
+      if (gap === null) {
+        html += '<span class="gap-value gap-null">-</span>';
+      } else {
+        const cls = getGapColorClass(gap);
+        html += `<span class="gap-value ${cls}">${gap.toFixed(1)}</span>`;
+        totalGap += gap;
+        gapCount++;
+        if (gap < minGap) minGap = gap;
+      }
+    }
+    html += '</div>';
+  }
+
+  return {
+    html: html || '<div class="gap-empty">无音符间隔数据</div>',
+    stats: {
+      totalNotes,
+      avgGap: gapCount > 0 ? (totalGap / gapCount).toFixed(1) : '-',
+      minGap: minGap === Infinity ? '-' : minGap.toFixed(1)
+    }
+  };
+}
+
+function showGapModal(songIndex, difficulty, branchType) {
+  const gapData = findGapData(songIndex, difficulty, branchType);
+  const song = allSongsData[songIndex];
+  const songName = song?.songName || '';
+  const diffLabel = DIFFICULTY_LABELS[difficulty] || difficulty;
+  const branchLabel = BRANCH_LABELS[branchType] || '';
+
+  gapModalTitle.textContent = `${songName} - ${diffLabel}${branchLabel ? ' (' + branchLabel + ')' : ''}`;
+
+  const result = renderGapContent(gapData);
+  if (!result) {
+    gapModalStats.innerHTML = '';
+    gapModalBody.innerHTML = '<div class="gap-empty">无音符间隔数据</div>';
+  } else {
+    gapModalStats.innerHTML = `
+      <span>音符数: ${result.stats.totalNotes}</span>
+      <span>平均间隔: ${result.stats.avgGap} ms</span>
+      <span>最小间隔: ${result.stats.minGap} ms</span>
+    `;
+    gapModalBody.innerHTML = result.html;
+  }
+
+  gapModal.classList.remove('hidden');
+}
+
+function hideGapModal() {
+  gapModal.classList.add('hidden');
+}
+
 /**
  * 显示计算结果
  */
@@ -454,7 +551,8 @@ function displayResults(results) {
   currentRows = [];
   let totalCharts = 0;
 
-  for (const song of results) {
+  for (let songIdx = 0; songIdx < results.length; songIdx++) {
+    const song = results[songIdx];
     const charts = Array.isArray(song.charts) ? song.charts : [];
     totalCharts += charts.length;
 
@@ -462,6 +560,7 @@ function displayResults(results) {
       currentRows.push({
         category: song.category,
         songName: song.songName,
+        songIndex: songIdx,
         difficulty: chart.difficulty,
         branchType: chart.branchType,
         ratings: chart.ratings
@@ -539,6 +638,9 @@ function renderRows(rows = currentRows) {
     if (keyword && !text.includes(keyword)) continue;
 
     const tr = document.createElement('tr');
+    tr.dataset.songIndex = row.songIndex;
+    tr.dataset.difficulty = row.difficulty;
+    tr.dataset.branchType = row.branchType;
     tr.innerHTML = `
       <td>${row.category}</td>
       <td><strong>${row.songName}</strong></td>
@@ -588,9 +690,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !errorModal.classList.contains('hidden')) {
-      hideErrorModal();
+    if (e.key === 'Escape') {
+      if (!gapModal.classList.contains('hidden')) {
+        hideGapModal();
+      } else if (!errorModal.classList.contains('hidden')) {
+        hideErrorModal();
+      }
     }
+  });
+
+  // 行点击查看音符间隔
+  resultsBody.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr');
+    if (!tr || tr.dataset.songIndex === undefined) return;
+    showGapModal(parseInt(tr.dataset.songIndex), tr.dataset.difficulty, tr.dataset.branchType);
+  });
+
+  // 间隔详情弹窗关闭
+  gapModalCloseBtn.addEventListener('click', hideGapModal);
+  gapModal.addEventListener('click', (e) => {
+    if (e.target === gapModal) hideGapModal();
   });
 
   // 难度筛选器
