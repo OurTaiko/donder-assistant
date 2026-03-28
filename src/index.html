@@ -244,6 +244,10 @@
             min-height: 100%;
         }
 
+        .table-wrapper:not(.has-data) thead {
+            display: none;
+        }
+
         .table-wrapper:not(.has-data) #resultsBody {
             height: 100%;
         }
@@ -463,6 +467,14 @@
 
             .controls.mobile-menu-open .action-group button {
                 width: 100%;
+            }
+
+            .table-wrapper.has-data {
+                overflow: auto;
+            }
+
+            .table-wrapper.has-data table {
+                min-width: 900px;
             }
         }
 

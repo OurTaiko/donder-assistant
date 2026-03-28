@@ -545,7 +545,17 @@ function displayResults(results) {
 
   if (!results || results.length === 0) {
     tableWrapper.classList.remove('has-data');
-    resultsBody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:#90a4ae;">无计算结果，请重新拖入数据文件夹</td></tr>';
+    resultsBody.innerHTML = `
+      <tr id="dropPlaceholderRow">
+        <td colspan="11" class="drop-placeholder-cell">
+          <div class="drop-placeholder">
+            <div class="drop-icon">📂</div>
+            <div class="drop-title">点击或拖拽上传 TJA 文件或文件夹</div>
+            <div class="drop-sub">支持 .TJA 谱面文件或包含 .TJA 文件的任意目录结构</div>
+          </div>
+        </td>
+      </tr>
+    `;
     return;
   }
 
