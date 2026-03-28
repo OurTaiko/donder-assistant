@@ -17,8 +17,6 @@ const resultsBody = document.getElementById('resultsBody');
 const tableWrapper = document.getElementById('tableWrapper');
 const totalSongsEl = document.getElementById('totalSongs');
 const calculatedSongsEl = document.getElementById('calculatedSongs');
-const progressContainer = document.getElementById('progressContainer');
-const progressFill = document.getElementById('progressFill');
 const loadingOverlay = document.getElementById('loadingOverlay');
 const loadingText = document.getElementById('loadingText');
 const errorModal = document.getElementById('errorModal');
@@ -305,7 +303,7 @@ function normalizeFileList(fileList) {
   }));
 }
 
-async function parseSongEntries(fileEntries, onProgress) {
+async function parseSongEntries(fileEntries) {
   const chartFiles = fileEntries.filter(({ file }) => isSupportedChartFile(file.name));
 
   if (!chartFiles.length) {
@@ -319,7 +317,6 @@ async function parseSongEntries(fileEntries, onProgress) {
   for (let i = 0; i < chartFiles.length; i++) {
     if (i % BATCH === 0) {
       showLoading(`正在读取文件... (${i}/${chartFiles.length})`);
-      if (onProgress) onProgress(i, chartFiles.length);
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
@@ -359,7 +356,6 @@ async function parseSongEntries(fileEntries, onProgress) {
     }
   }
 
-  if (onProgress) onProgress(chartFiles.length, chartFiles.length);
   showLoading(`已读取 ${songs.length} 首歌曲，准备计算...`);
   await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -377,33 +373,17 @@ async function parseSongEntries(fileEntries, onProgress) {
 }
 
 async function handleImportedEntries(fileEntries, sourceLabel) {
-  const totalFiles = fileEntries.filter(({ file }) => isSupportedChartFile(file.name)).length;
-
   showLoading('正在读取导入的数据文件...');
-  progressContainer.classList.remove('hidden');
-  updateProgress(0, totalFiles || 1);
-
-  const importedSongs = await parseSongEntries(fileEntries, (current, total) => {
-    updateProgress(current, total);
-  });
+  const importedSongs = await parseSongEntries(fileEntries);
 
   if (!importedSongs.length) {
     // 本次导入未发现可计算谱面，静默结束（无关 JSON 已被忽略）
     hideLoading();
-    progressContainer.classList.add('hidden');
     return;
   }
 
   allSongsData = importedSongs;
   await runCalculation(importedSongs, sourceLabel);
-}
-
-/**
- * 更新进度条
- */
-function updateProgress(current, total) {
-  const percentage = (current / total) * 100;
-  progressFill.style.width = percentage + '%';
 }
 
 /**
@@ -877,13 +857,9 @@ async function runCalculation(dataset, sourceLabel = '当前数据') {
 
   try {
     showLoading(`准备计算（${sourceLabel}）...`);
-    progressContainer.classList.remove('hidden');
-    updateProgress(0, dataset.length);
     allResults = await calculateDifficulty(
       dataset,
-      (current, total) => {
-        updateProgress(current, total);
-      },
+      null,
       (statusText) => {
         showLoading(statusText);
       }
@@ -892,14 +868,12 @@ async function runCalculation(dataset, sourceLabel = '当前数据') {
     displayResults(allResults);
     exportBtn.disabled = false;
     hideLoading();
-    progressContainer.classList.add('hidden');
 
     console.log(`✅ 计算完成（${sourceLabel}）`);
   } catch (error) {
     console.error('❌ 计算失败:', error);
     showErrorModal(error.message || '计算失败，请检查数据格式。', '计算失败');
     hideLoading();
-    progressContainer.classList.add('hidden');
   }
 }
 
