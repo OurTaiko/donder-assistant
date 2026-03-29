@@ -33,6 +33,25 @@ export default defineConfig({
     assetsInlineLimit: 0,
     rollupOptions: {
       output: {
+        manualChunks: (id) => {
+          if (!id.includes('node_modules')) return undefined;
+
+          const normalized = id.replace(/\\/g, '/');
+
+          if (/\/node_modules\/(react|react-dom|scheduler)\//.test(normalized)) {
+            return 'vendor-react';
+          }
+
+          if (
+            /\/node_modules\/(?:@fluentui|@griffel|@emotion|@floating-ui|tabster|keyborg|stylis|rtl-css-js|@swc\/helpers)\//.test(
+              normalized
+            )
+          ) {
+            return 'vendor-fluent';
+          }
+
+          return 'vendor-misc';
+        },
         assetFileNames: (assetInfo) => {
           if (assetInfo.name.endsWith('.py')) {
             return 'assets/py/[name]-[hash][extname]';
