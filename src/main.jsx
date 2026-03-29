@@ -929,8 +929,8 @@ function App() {
             onDrop={onDrop}
           >
             <section className="list-info-bar">
-              <Badge appearance="filled" color="brand">歌曲数: {totalSongs}</Badge>
-              <Badge appearance="filled" color="informative">谱面数: {totalCharts}</Badge>
+              <Body1 className="list-stat">歌曲数: {totalSongs}</Body1>
+              <Body1 className="list-stat">谱面数: {totalCharts}</Body1>
             </section>
             {!filteredRows.length ? (
               <div className="drop-placeholder" role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()}>
