@@ -893,11 +893,22 @@ function App() {
           position="start"
           onOpenChange={(_, data) => setMenuOpen(data.open)}
         >
-          <NavDrawerHeader className="app-nav-drawer-header">
+          <NavDrawerHeader
+            className="app-nav-drawer-header"
+            role="button"
+            tabIndex={0}
+            aria-label="收起操作抽屉"
+            onClick={() => setMenuOpen(false)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setMenuOpen(false);
+              }
+            }}
+          >
             <Hamburger
               className="header-hamburger drawer-header-hamburger"
               aria-label="收起操作抽屉"
-              onClick={() => setMenuOpen(false)}
             />
           </NavDrawerHeader>
           <NavDrawerBody>

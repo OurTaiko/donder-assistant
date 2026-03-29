@@ -194,6 +194,7 @@ body {
   min-height: 55px;
   padding: 12px 14px 10px !important;
   width: 100%;
+  cursor: pointer;
   display: flex !important;
   justify-content: flex-start !important;
   justify-items: start !important;
