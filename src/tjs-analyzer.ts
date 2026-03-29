@@ -13,6 +13,7 @@ type CourseNoteTypes = ChartNoteTypes | Record<string, ChartNoteTypes>;
 export interface TjaAnalysisJson {
   courses: Record<string, CourseGaps>;
   noteTypes: Record<string, CourseNoteTypes>;
+  levels: Record<string, number>;
 }
 
 function roundMs(value: number): number {
@@ -106,12 +107,14 @@ export function analyzeTjaToJson(content: string, unit: GapUnit = 'ms'): TjaAnal
   const parsed = parseTJA(content);
   const courses: Record<string, CourseGaps> = {};
   const noteTypes: Record<string, CourseNoteTypes> = {};
+  const levels: Record<string, number> = {};
 
   for (const [courseName, chart] of Object.entries(parsed)) {
     const analyzed = analyzeChart(chart, unit);
     courses[courseName] = analyzed.gaps;
     noteTypes[courseName] = analyzed.noteTypes;
+    levels[courseName] = Number.isFinite(chart.level) ? chart.level : 0;
   }
 
-  return { courses, noteTypes };
+  return { courses, noteTypes, levels };
 }

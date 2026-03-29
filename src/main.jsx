@@ -58,6 +58,7 @@ const BRANCH_LABELS = {
 };
 
 const SORTABLE_COLS = {
+  level: 'level',
   stamina: 'stamina',
   complex: 'complex',
   complexRatio: 'complexRatio',
@@ -157,6 +158,14 @@ function normalizeSongJson(songData) {
     }
   }
 
+  let normalizedLevels;
+  if (songData.levels && typeof songData.levels === 'object') {
+    normalizedLevels = {};
+    for (const [difficultyKey, level] of Object.entries(songData.levels)) {
+      normalizedLevels[getDifficultyKey(difficultyKey)] = level;
+    }
+  }
+
   const normalized = {
     ...songData,
     courses: normalizedCourses
@@ -164,6 +173,10 @@ function normalizeSongJson(songData) {
 
   if (normalizedNoteTypes) {
     normalized.noteTypes = normalizedNoteTypes;
+  }
+
+  if (normalizedLevels) {
+    normalized.levels = normalizedLevels;
   }
 
   return normalized;
@@ -386,6 +399,25 @@ function renderGapContent(gapData) {
   };
 }
 
+function getChartLevel(songData, difficulty) {
+  if (!songData || typeof songData !== 'object') return null;
+
+  const levelMap = songData.levels;
+  if (levelMap && typeof levelMap === 'object') {
+    const mapped = levelMap[difficulty] ?? levelMap[getDifficultyKey(difficulty)];
+    const parsed = Number(mapped);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+
+  const course = songData.courses?.[difficulty] ?? songData.courses?.[getDifficultyKey(difficulty)];
+  if (course && typeof course === 'object' && !Array.isArray(course) && Number.isFinite(Number(course.level))) {
+    const parsed = Number(course.level);
+    if (parsed > 0) return parsed;
+  }
+
+  return null;
+}
+
 function App() {
   const fileInputRef = useRef(null);
   const headerRef = useRef(null);
@@ -495,14 +527,14 @@ function App() {
 
   const gridColumns = useMemo(() => ([
     createTableColumn({
-      columnId: 'category',
-      renderHeaderCell: () => '分类',
-      renderCell: (item) => item.category
-    }),
-    createTableColumn({
       columnId: 'songName',
       renderHeaderCell: () => '歌曲名',
       renderCell: (item) => item.songName
+    }),
+    createTableColumn({
+      columnId: 'category',
+      renderHeaderCell: () => '分类',
+      renderCell: (item) => item.category
     }),
     createTableColumn({
       columnId: 'difficulty',
@@ -511,6 +543,11 @@ function App() {
         const diffLabel = DIFFICULTY_LABELS[item.difficulty] || item.difficulty;
         return <span style={{ color: getDifficultyColor(item.difficulty), fontWeight: 700 }}>{diffLabel}</span>;
       }
+    }),
+    createTableColumn({
+      columnId: 'level',
+      renderHeaderCell: () => '星级',
+      renderCell: (item) => (item.level ? `★${item.level}` : '-')
     }),
     createTableColumn({
       columnId: 'branchType',
@@ -564,8 +601,8 @@ function App() {
     if (sortState.col !== null && SORTABLE_COLS[sortState.col]) {
       const field = SORTABLE_COLS[sortState.col];
       rows.sort((a, b) => {
-        const va = a.ratings[field] || 0;
-        const vb = b.ratings[field] || 0;
+        const va = field === 'level' ? (a.level || 0) : (a.ratings[field] || 0);
+        const vb = field === 'level' ? (b.level || 0) : (b.ratings[field] || 0);
         return sortState.asc ? va - vb : vb - va;
       });
     }
@@ -719,14 +756,17 @@ function App() {
       const rows = [];
       for (let songIdx = 0; songIdx < results.length; songIdx += 1) {
         const song = results[songIdx];
+        const sourceSong = dataset[songIdx];
         const charts = Array.isArray(song.charts) ? song.charts : [];
         for (const chart of charts) {
+          const level = getChartLevel(sourceSong?.data, chart.difficulty);
           rows.push({
             id: `${songIdx}-${chart.difficulty}-${chart.branchType}-${rows.length}`,
             category: song.category,
             songName: song.songName,
             songIndex: songIdx,
             difficulty: chart.difficulty,
+            level,
             branchType: chart.branchType,
             ratings: chart.ratings
           });
@@ -763,15 +803,18 @@ function App() {
       return;
     }
 
-    const rows = ['分类,歌曲,难度,分支,体力,复合,复合难占比,节奏,节奏难占比,手速,爆发'];
+    const rows = ['分类,歌曲,难度,星级,分支,体力,复合,复合难占比,节奏,节奏难占比,手速,爆发'];
 
-    for (const song of allResults) {
+    for (let songIndex = 0; songIndex < allResults.length; songIndex += 1) {
+      const song = allResults[songIndex];
+      const sourceSong = allSongsData[songIndex];
       for (const chart of song.charts) {
         const difficultyLabel = DIFFICULTY_LABELS[chart.difficulty] || chart.difficulty;
         const branchLabel = BRANCH_LABELS[chart.branchType] || '';
+        const level = getChartLevel(sourceSong?.data, chart.difficulty);
 
         rows.push(
-          `"${song.category}","${song.songName}","${difficultyLabel}","${branchLabel}",${chart.ratings.stamina},${chart.ratings.complex},${chart.ratings.complexRatio},${chart.ratings.rhythm},${chart.ratings.rhythmRatio},${chart.ratings.speed},${chart.ratings.burst}`
+          `"${song.category}","${song.songName}","${difficultyLabel}","${level || ''}","${branchLabel}",${chart.ratings.stamina},${chart.ratings.complex},${chart.ratings.complexRatio},${chart.ratings.rhythm},${chart.ratings.rhythmRatio},${chart.ratings.speed},${chart.ratings.burst}`
         );
       }
     }
@@ -963,7 +1006,7 @@ function App() {
                       {({ renderHeaderCell, columnId }) => (
                         <DataGridHeaderCell
                           onClick={() => onSort(columnId)}
-                          className={SORTABLE_COLS[columnId] ? 'sortable' : ''}
+                          className={`${SORTABLE_COLS[columnId] ? 'sortable' : ''} ${columnId === 'songName' ? 'sticky-first-col-header' : ''}`.trim()}
                         >
                           <span className="header-cell-text">
                             <span className="header-title-text">{renderHeaderCell()}</span>
@@ -976,7 +1019,11 @@ function App() {
                   <DataGridBody>
                     {({ item, rowId }) => (
                       <DataGridRow key={rowId} className="result-row" onClick={() => openGapModal(item)}>
-                        {({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}
+                        {({ renderCell, columnId }) => (
+                          <DataGridCell className={columnId === 'songName' ? 'sticky-first-col-cell' : ''}>
+                            {renderCell(item)}
+                          </DataGridCell>
+                        )}
                       </DataGridRow>
                     )}
                   </DataGridBody>
