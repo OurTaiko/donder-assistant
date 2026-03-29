@@ -1,8 +1,7 @@
-import * as Renderer from 'tja-renderer';
 import { getGapMeasures, getGapMs } from './note-gap.ts';
-
-const { NoteType, RENDERABLE_NOTES, parseTJA } = Renderer.Private;
-type ParsedChart = Renderer.Private.ParsedChart;
+import { parseTJA } from '../TJARenderer/src/tja-parser.ts';
+import { RENDERABLE_NOTES, NoteType } from '../TJARenderer/src/primitives.ts';
+import type { ParsedChart } from '../TJARenderer/src/tja-parser.ts';
 type GapUnit = 'measures' | 'ms';
 
 type NoteGaps = (number | null)[][];

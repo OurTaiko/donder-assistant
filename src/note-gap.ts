@@ -1,22 +1,6 @@
-import * as Renderer from "tja-renderer";
-
-const privateApi = Renderer.Private as unknown as {
-  RENDERABLE_NOTES: string[];
-  JUDGEABLE_NOTES: string[];
-  getEffectiveBpm?: (barParams: unknown, charIdx: number) => number;
-};
-
-const { RENDERABLE_NOTES, JUDGEABLE_NOTES } = privateApi;
-type ParsedChart = Renderer.Private.ParsedChart;
-
-function resolveEffectiveBpm(barParams: unknown, charIdx: number): number {
-  if (typeof privateApi.getEffectiveBpm === "function") {
-    return privateApi.getEffectiveBpm(barParams, charIdx);
-  }
-
-  const bpm = (barParams as { bpm?: number } | undefined)?.bpm;
-  return typeof bpm === "number" ? bpm : 120;
-}
+import { RENDERABLE_NOTES, JUDGEABLE_NOTES } from '../TJARenderer/src/primitives.ts';
+import type { ParsedChart } from '../TJARenderer/src/tja-parser.ts';
+import { getEffectiveBpm } from '../TJARenderer/src/tja-parser.ts';
 
 export interface GapOptions {
   /** If true, return null when the previous renderable note is not judgeable. */
@@ -47,14 +31,14 @@ function getGapSegments(
   const currentParams = chart.barParams?.[currentBarIdx];
   if (!currentParams) return null;
   const currentRatio = currentParams.measureRatio;
-  const currentBpm = resolveEffectiveBpm(currentParams, currentCharIdx);
+  const currentBpm = getEffectiveBpm(currentParams, currentCharIdx);
 
   // Check within current bar
   for (let i = currentCharIdx - 1; i >= 0; i--) {
     if (RENDERABLE_NOTES.includes(currentBar[i])) {
       if (requireJudgeable && !JUDGEABLE_NOTES.includes(currentBar[i])) return null;
       const fraction = ((currentCharIdx - i) / currentTotal) * currentRatio;
-      return [{ fraction, bpm: resolveEffectiveBpm(currentParams, i) }];
+      return [{ fraction, bpm: getEffectiveBpm(currentParams, i) }];
     }
   }
 
@@ -67,7 +51,7 @@ function getGapSegments(
     const prevParams = chart.barParams?.[b];
     const prevRatio = prevParams?.measureRatio ?? 1.0;
     if (!prevParams) return null;
-    const prevBpm = resolveEffectiveBpm(prevParams, prevBar?.length ?? 0);
+    const prevBpm = getEffectiveBpm(prevParams, prevBar?.length ?? 0);
 
     if (!prevBar || prevBar.length === 0) {
       if (maxMeasures !== undefined && totalMeasures + prevRatio > maxMeasures + 0.001) return null;
@@ -84,7 +68,7 @@ function getGapSegments(
         const distInPrev = ((prevTotal - i) / prevTotal) * prevRatio;
         const candidateTotal = totalMeasures + distInPrev;
         if (maxMeasures !== undefined && candidateTotal > maxMeasures + 0.0001) return null;
-        segments.push({ fraction: distInPrev, bpm: resolveEffectiveBpm(prevParams, i) });
+        segments.push({ fraction: distInPrev, bpm: getEffectiveBpm(prevParams, i) });
         return segments;
       }
     }
