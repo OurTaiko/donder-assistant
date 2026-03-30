@@ -816,6 +816,7 @@ function App() {
       branchType: selectedChartRow.branchType,
       branchLabel,
       category: selectedChartRow.category,
+      ratings: selectedChartRow.ratings || null,
       stats: result?.stats || null,
       bars: result?.bars || []
     };

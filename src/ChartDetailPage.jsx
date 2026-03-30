@@ -27,11 +27,31 @@ function getBranchColor(branchType) {
   return colors[branchType] || '#667085';
 }
 
+function formatRatingValue(value) {
+  if (value === 0 || !value) return '-';
+  return Number(value).toFixed(2);
+}
+
+function formatRatingWithRatio(value, ratio) {
+  const valueText = formatRatingValue(value);
+  const ratioText = formatRatingValue(ratio);
+  if (ratioText === '-') return valueText;
+  return `${valueText} (${ratioText})`;
+}
+
 function ChartDetailPage({ detail, onBack }) {
   const statItems = detail?.stats ? [
     { label: '音符总数', value: detail.stats.totalNotes },
     { label: '平均间隔', value: `${detail.stats.avgGap} ms` },
     { label: '最小间隔', value: `${detail.stats.minGap} ms` }
+  ] : [];
+
+  const ratingItems = detail?.ratings ? [
+    { label: '体力', value: detail.ratings.stamina },
+    { label: '手速', value: detail.ratings.speed },
+    { label: '爆发', value: detail.ratings.burst },
+    { label: '复合', value: formatRatingWithRatio(detail.ratings.complex, detail.ratings.complexRatio) },
+    { label: '节奏', value: formatRatingWithRatio(detail.ratings.rhythm, detail.ratings.rhythmRatio) }
   ] : [];
 
   return (
@@ -53,46 +73,66 @@ function ChartDetailPage({ detail, onBack }) {
       <div className="chart-detail-body">
         {detail ? (
           <div className="chart-detail-grid">
-            <section className="chart-detail-card chart-detail-stats-card" aria-label="谱面概要">
-              <h3 className="chart-detail-card-title">谱面概要</h3>
+            <div className="chart-detail-left-column">
+              <section className="chart-detail-card chart-detail-stats-card" aria-label="概览">
+                <h3 className="chart-detail-card-title">概览</h3>
 
-              {(detail?.diffLabel || detail?.branchLabel || detail?.stats) ? (
-                <div className="chart-detail-stats-grid">
-                  {(detail?.diffLabel || detail?.level || detail?.branchLabel) && (
-                    <>
-                      <div className="chart-detail-stat-block chart-detail-basic-info">
-                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '14px' }}>
-                          <div style={{ color: getDifficultyColor(detail.difficulty), fontWeight: 700 }}>
-                            {detail.diffLabel}
+                {(detail?.diffLabel || detail?.branchLabel || detail?.stats) ? (
+                  <div className="chart-detail-stats-grid">
+                    {(detail?.diffLabel || detail?.level || detail?.branchLabel) && (
+                      <>
+                        <div className="chart-detail-stat-block chart-detail-basic-info">
+                          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', fontSize: '14px' }}>
+                            <div style={{ color: getDifficultyColor(detail.difficulty), fontWeight: 700 }}>
+                              {detail.diffLabel}
+                            </div>
+                            {detail.level && (
+                              <div style={{ color: '#1f4f71' }}>
+                                ★{detail.level}
+                              </div>
+                            )}
+                            {detail.branchLabel && (
+                              <div style={{ color: getBranchColor(detail.branchType), fontWeight: 600 }}>
+                                {detail.branchLabel}
+                              </div>
+                            )}
                           </div>
-                          {detail.level && (
-                            <div style={{ color: '#1f4f71' }}>
-                              ★{detail.level}
-                            </div>
-                          )}
-                          {detail.branchLabel && (
-                            <div style={{ color: getBranchColor(detail.branchType), fontWeight: 600 }}>
-                              {detail.branchLabel}
-                            </div>
-                          )}
                         </div>
+                      </>
+                    )}
+                    {statItems.map((item) => (
+                      <div className="chart-detail-stat-block" key={item.label}>
+                        <span className="chart-detail-stat-label">{item.label}</span>
+                        <span className="chart-detail-stat-value">{item.value}</span>
                       </div>
-                    </>
-                  )}
-                  {statItems.map((item) => (
-                    <div className="chart-detail-stat-block" key={item.label}>
-                      <span className="chart-detail-stat-label">{item.label}</span>
-                      <span className="chart-detail-stat-value">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Body1 className="hint">无可用的概要数据</Body1>
-              )}
-            </section>
+                    ))}
+                  </div>
+                ) : (
+                  <Body1 className="hint">无可用的概要数据</Body1>
+                )}
+              </section>
 
-            <section className="chart-detail-card chart-detail-gaps-card" aria-label="小节间隔明细">
-              <h3 className="chart-detail-card-title">小节间隔明细</h3>
+              <section className="chart-detail-card chart-detail-ratings-card" aria-label="定数">
+                <h3 className="chart-detail-card-title">定数</h3>
+                {ratingItems.length ? (
+                  <div className="chart-detail-ratings-grid">
+                    {ratingItems.map((item) => (
+                      <div className="chart-detail-stat-block chart-detail-rating-block" key={item.label}>
+                        <span className="chart-detail-stat-label">{item.label}</span>
+                        <span className="chart-detail-stat-value">
+                          {typeof item.value === 'string' ? item.value : formatRatingValue(item.value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Body1 className="hint">暂无可用定数数据</Body1>
+                )}
+              </section>
+            </div>
+
+            <section className="chart-detail-card chart-detail-gaps-card" aria-label="音符间隔明细">
+              <h3 className="chart-detail-card-title">音符间隔明细</h3>
               {detail.bars.length ? (
                 <div className="gap-list chart-gap-list">
                   {detail.bars.map((bar) => (
