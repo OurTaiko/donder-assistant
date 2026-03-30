@@ -114,9 +114,11 @@ const NETWORK_PROBE_URLS = [
 const ROUTER_BASENAME = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/';
 const FAVORITE_IDS_STORAGE_KEY = 'taiko-rating.favorite-chart-ids.v1';
 const FAVORITE_SONGS_CACHE_FLAG_KEY = 'taiko-rating.favorite-songs-cache-flag.v1';
+const DIFF_FILTER_STORAGE_KEY = 'taiko-rating.diff-filter.v1';
 const FAVORITE_SONGS_DB_NAME = 'taiko-rating-cache';
 const FAVORITE_SONGS_DB_STORE = 'kv';
 const FAVORITE_SONGS_DB_KEY = 'favorite-songs';
+const DIFFICULTY_FILTER_VALUE_SET = new Set(DIFFICULTY_FILTER_OPTIONS.map((option) => option.value));
 
 function loadStoredJson(key, fallback) {
   try {
@@ -676,7 +678,17 @@ function App() {
   const [allResults, setAllResults] = useState([]);
   const [currentRows, setCurrentRows] = useState([]);
   const [sortState, setSortState] = useState({ col: null, asc: false });
-  const [diffFilter, setDiffFilter] = useState('oni+edit');
+  const [diffFilter, setDiffFilter] = useState(() => {
+    try {
+      const stored = localStorage.getItem(DIFF_FILTER_STORAGE_KEY);
+      if (stored && DIFFICULTY_FILTER_VALUE_SET.has(stored)) {
+        return stored;
+      }
+    } catch (_) {
+      // Ignore storage access errors and use default filter.
+    }
+    return 'oni+edit';
+  });
   const [searchInput, setSearchInput] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -704,6 +716,14 @@ function App() {
     setSearchInput(routeSearchKeyword);
     setSearchKeyword(routeSearchKeyword);
   }, [routeSearchKeyword]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DIFF_FILTER_STORAGE_KEY, diffFilter);
+    } catch (_) {
+      // Ignore storage access errors.
+    }
+  }, [diffFilter]);
 
   const isAboutRoute = location.pathname === '/about';
   const isRootRoute = location.pathname === '/';
@@ -805,6 +825,9 @@ function App() {
 
     setHasFavoriteCache(true);
     localStorage.setItem(FAVORITE_SONGS_CACHE_FLAG_KEY, '1');
+    setSearchInput('');
+    setSearchKeyword('');
+    commitSearch('', { replace: true });
     setAllSongsData(restoredSongs);
     await runCalculation(restoredSongs, sourceLabel);
     return true;
@@ -1154,7 +1177,7 @@ function App() {
     setErrorDialog((prev) => ({ ...prev, open: false }));
   }
 
-  function commitSearch(nextValue = searchInput) {
+  function commitSearch(nextValue = searchInput, options = {}) {
     const keyword = nextValue.trim();
     const params = new URLSearchParams(location.search);
     if (keyword) {
@@ -1163,7 +1186,7 @@ function App() {
       params.delete('q');
     }
     const search = params.toString();
-    navigate({ pathname: '/', search: search ? `?${search}` : '' });
+    navigate({ pathname: '/', search: search ? `?${search}` : '' }, { replace: Boolean(options.replace) });
   }
 
   function closeChartDetailPage() {
