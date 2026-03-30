@@ -1560,7 +1560,7 @@ function App() {
                 aria-label="打开操作抽屉"
                 onClick={() => setMenuOpen((prev) => !prev)}
               />
-              {!hideTopBarTitle ? <Title3 className="top-bar-title">Donder Tools</Title3> : null}
+              {!hideTopBarTitle ? <Title3 className="top-bar-title">Donder Assistant</Title3> : null}
             </div>
             {isRootRoute ? (
               <div className="actions-row">

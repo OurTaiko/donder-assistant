@@ -6,11 +6,21 @@
   <meta name="theme-color" content="#dc4a3a">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Donder Tools</title>
+  <title>Donder Assistant</title>
   <link rel="icon" href="%BASE_URL%favicon.ico" type="image/x-icon">
   <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%icons/apple-touch-icon.png">
   <link rel="manifest" href="%BASE_URL%manifest.webmanifest">
-  <script src="%BASE_URL%coi-serviceworker.js"></script>
+  <script type="module">
+    if (import.meta.env.PROD) {
+      const swScript = document.createElement('script');
+      swScript.src = `${import.meta.env.BASE_URL}coi-serviceworker.js`;
+      document.head.appendChild(swScript);
+    } else if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((registration) => registration.unregister());
+      });
+    }
+  </script>
 </head>
 <body>
   <div id="root"></div>

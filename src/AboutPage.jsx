@@ -19,7 +19,7 @@ function AboutPage({ footerInfo, isOffline, onBack }) {
       </header>
       <div className="table-wrapper" style={{ padding: 16 }}>
         <Body1>
-          Donder Tools 是一个面向太鼓谱面的分析与速算工具集合，支持导入 TJA 谱面并快速查看多维度结果。
+          Donder Assistant 是一个面向太鼓谱面的分析与速算工具集合，支持导入 TJA 谱面并快速查看多维度结果。
         </Body1>
         <Body1 style={{ marginTop: 8 }}>
           在“数据分析”中，你可以上传或拖拽文件夹批量导入谱面，使用搜索与筛选定位歌曲，并将分析结果导出为 CSV。
@@ -32,7 +32,7 @@ function AboutPage({ footerInfo, isOffline, onBack }) {
           <div className="about-meta-line">
             版本:
             {' '}
-            <Link href={`https://github.com/Dafrok/donder-tool/commit/${footerInfo.hash}`} target="_blank" rel="noreferrer">
+            <Link href={`https://github.com/Dafrok/donder-assistant/commit/${footerInfo.hash}`} target="_blank" rel="noreferrer">
               {footerInfo.hash}
             </Link>
           </div>

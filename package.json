@@ -1,7 +1,7 @@
 {
   "name": "taiko-rating-calculator",
   "version": "2.0.0",
-  "description": "Donder Tools - Web toolkit for Taiko chart analysis",
+  "description": "Donder Assistant - Web toolkit for Taiko chart analysis",
   "type": "module",
   "scripts": {
     "dev": "vite",
