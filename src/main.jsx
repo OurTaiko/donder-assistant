@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter, matchPath, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Badge,
+  Breadcrumb,
+  BreadcrumbButton,
+  BreadcrumbItem,
   Body1,
   Button,
   Dialog,
@@ -20,13 +23,14 @@ import {
   FluentProvider,
   Hamburger,
   Input,
-  Link,
   Nav,
   NavDrawer,
   NavDrawerBody,
   NavDrawerHeader,
   NavItem,
   Spinner,
+  Toolbar,
+  ToolbarButton,
   createLightTheme,
   createTableColumn,
   Title3,
@@ -41,6 +45,8 @@ import {
 } from '@fluentui/react-icons';
 import { calculateDifficulty, warmupPython } from './data-engine.js';
 import { analyzeTjaToJson } from './tjs-analyzer.ts';
+import AboutPage from './AboutPage.jsx';
+import ChartDetailPage from './ChartDetailPage.jsx';
 import './styles.css';
 
 const DIFFICULTY_LABELS = {
@@ -80,22 +86,22 @@ const SORTABLE_COLS = {
 };
 
 const TAIKO_KA_PALETTE = {
-  10: '#041823',
-  20: '#072638',
-  30: '#0a354d',
-  40: '#0d4462',
-  50: '#105378',
-  60: '#14638d',
-  70: '#1773a3',
-  80: '#1b83b9',
-  90: '#1d89bf',
-  100: '#249ad8',
-  110: '#3aa8dd',
-  120: '#52b4e1',
-  130: '#6bc0e6',
-  140: '#88ceec',
-  150: '#a7dcf2',
-  160: '#c7eaf8'
+  10: '#7a2f1b',
+  20: '#8f3a20',
+  30: '#a54625',
+  40: '#bb522b',
+  50: '#cf5f31',
+  60: '#de6f39',
+  70: '#e98045',
+  80: '#ef8f57',
+  90: '#f39f6c',
+  100: '#f7ae81',
+  110: '#f9bc95',
+  120: '#fbc9aa',
+  130: '#fdd7bf',
+  140: '#fee4d3',
+  150: '#fff0e6',
+  160: '#fff8f2'
 };
 
 const taikoKaTheme = {
@@ -440,7 +446,17 @@ function getChartLevel(songData, difficulty) {
   return null;
 }
 
+async function hashText(text) {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const headerRef = useRef(null);
   const footerRef = useRef(null);
@@ -450,6 +466,7 @@ function App() {
   const [currentRows, setCurrentRows] = useState([]);
   const [sortState, setSortState] = useState({ col: null, asc: false });
   const [diffFilter, setDiffFilter] = useState('oni+edit');
+  const [searchInput, setSearchInput] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('加载中...');
@@ -458,14 +475,30 @@ function App() {
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [hideTopBarTitle, setHideTopBarTitle] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [aboutDialogOpen, setAboutDialogOpen] = useState(false);
   const [errorDialog, setErrorDialog] = useState({ open: false, title: '数据导入失败', message: '' });
-  const [gapDialog, setGapDialog] = useState({
-    open: false,
-    title: '音符间隔详情',
-    stats: null,
-    bars: []
-  });
+  const routeSearchKeyword = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('q') ?? '';
+  }, [location.search]);
+
+  useEffect(() => {
+    setSearchInput(routeSearchKeyword);
+    setSearchKeyword(routeSearchKeyword);
+  }, [routeSearchKeyword]);
+
+  const isAboutRoute = location.pathname === '/about';
+  const isRootRoute = location.pathname === '/';
+  const chartRouteMatch = matchPath('/chart/:chartId', location.pathname);
+  const isChartRoute = Boolean(chartRouteMatch);
+  const isKnownRoute = isRootRoute || isAboutRoute || isChartRoute;
+  const routeChartId = useMemo(() => {
+    if (!chartRouteMatch?.params?.chartId) return '';
+    try {
+      return decodeURIComponent(chartRouteMatch.params.chartId);
+    } catch (_) {
+      return chartRouteMatch.params.chartId;
+    }
+  }, [chartRouteMatch]);
 
   useEffect(() => {
     if (fileInputRef.current) {
@@ -569,6 +602,12 @@ function App() {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [filterPanelOpen]);
+
+  useEffect(() => {
+    if (!isKnownRoute) {
+      navigate('/', { replace: true });
+    }
+  }, [isKnownRoute, navigate]);
 
   const footerInfo = useMemo(() => {
     const date = new Date(__BUILD_TIME__);
@@ -684,6 +723,39 @@ function App() {
     });
   }, [currentRows, diffFilter, searchKeyword, sortState]);
 
+  const selectedChartRow = useMemo(() => {
+    if (!routeChartId) return null;
+    return currentRows.find((row) => row.id === routeChartId) || null;
+  }, [currentRows, routeChartId]);
+
+  const selectedChartDetail = useMemo(() => {
+    if (!selectedChartRow) return null;
+    const gapData = findGapData(selectedChartRow.songIndex, selectedChartRow.difficulty, selectedChartRow.branchType);
+    const song = allSongsData[selectedChartRow.songIndex];
+    const songName = song?.songName || '';
+    const diffLabel = DIFFICULTY_LABELS[selectedChartRow.difficulty] || selectedChartRow.difficulty;
+    const branchLabel = BRANCH_LABELS[selectedChartRow.branchType] || '';
+    const result = renderGapContent(gapData);
+    return {
+      title: `${songName} - ${diffLabel}${branchLabel ? ` (${branchLabel})` : ''}`,
+      songName,
+      difficulty: selectedChartRow.difficulty,
+      diffLabel,
+      level: selectedChartRow.level,
+      branchType: selectedChartRow.branchType,
+      branchLabel,
+      category: selectedChartRow.category,
+      stats: result?.stats || null,
+      bars: result?.bars || []
+    };
+  }, [allSongsData, selectedChartRow]);
+
+  useEffect(() => {
+    if (isChartRoute && !selectedChartDetail) {
+      navigate({ pathname: '/', search: location.search });
+    }
+  }, [isChartRoute, selectedChartDetail, navigate, location.search]);
+
   const totalSongs = allResults.length;
   const totalCharts = currentRows.length;
 
@@ -704,8 +776,22 @@ function App() {
     setErrorDialog((prev) => ({ ...prev, open: false }));
   }
 
-  function hideGapModal() {
-    setGapDialog((prev) => ({ ...prev, open: false }));
+  function commitSearch(nextValue = searchInput) {
+    const keyword = nextValue.trim();
+    const params = new URLSearchParams(location.search);
+    if (keyword) {
+      params.set('q', keyword);
+    } else {
+      params.delete('q');
+    }
+    const search = params.toString();
+    navigate({ pathname: '/', search: search ? `?${search}` : '' });
+  }
+
+  function closeChartDetailPage() {
+    if (location.pathname !== '/') {
+      navigate({ pathname: '/', search: location.search });
+    }
   }
 
   function findGapData(songIndex, difficulty, branchType) {
@@ -723,19 +809,10 @@ function App() {
     return null;
   }
 
-  function openGapModal(row) {
-    const gapData = findGapData(row.songIndex, row.difficulty, row.branchType);
-    const song = allSongsData[row.songIndex];
-    const songName = song?.songName || '';
-    const diffLabel = DIFFICULTY_LABELS[row.difficulty] || row.difficulty;
-    const branchLabel = BRANCH_LABELS[row.branchType] || '';
-    const result = renderGapContent(gapData);
-
-    setGapDialog({
-      open: true,
-      title: `${songName} - ${diffLabel}${branchLabel ? ` (${branchLabel})` : ''}`,
-      stats: result?.stats || null,
-      bars: result?.bars || []
+  function openChartDetailPage(row) {
+    navigate({
+      pathname: `/chart/${encodeURIComponent(row.id)}`,
+      search: location.search
     });
   }
 
@@ -780,7 +857,8 @@ function App() {
         }
 
         const { category, songName } = extractSongMeta(relativePath, file.name, preferredSongName, preferredCategory);
-        songs.push({ category, songName, data });
+        const songHash = await hashText(`${relativePath}\n${text}`);
+        songs.push({ category, songName, data, songHash });
       } catch (error) {
         errors.push(`${relativePath}: ${error.message}`);
       }
@@ -822,8 +900,9 @@ function App() {
         const charts = Array.isArray(song.charts) ? song.charts : [];
         for (const chart of charts) {
           const level = getChartLevel(sourceSong?.data, chart.difficulty);
+          const chartId = await hashText(`${sourceSong?.songHash || song.songName}|${chart.difficulty}|${chart.branchType || 'unbranched'}`);
           rows.push({
-            id: `${songIdx}-${chart.difficulty}-${chart.branchType}-${rows.length}`,
+            id: chartId,
             category: song.category,
             songName: song.songName,
             songIndex: songIdx,
@@ -853,6 +932,18 @@ function App() {
     if (!importedSongs.length) {
       hideLoading();
       return;
+    }
+
+    // Reset search after importing new charts so results start from a full list.
+    setSearchInput('');
+    setSearchKeyword('');
+    if (location.search) {
+      const params = new URLSearchParams(location.search);
+      if (params.has('q')) {
+        params.delete('q');
+        const search = params.toString();
+        navigate({ pathname: location.pathname, search: search ? `?${search}` : '' }, { replace: true });
+      }
     }
 
     setAllSongsData(importedSongs);
@@ -938,12 +1029,10 @@ function App() {
   }
 
   function handleNavSelect(_, data) {
-    if (data.value === 'upload') {
-      fileInputRef.current?.click();
-    } else if (data.value === 'export') {
-      exportResults();
+    if (data.value === 'analysis') {
+      navigate('/');
     } else if (data.value === 'about') {
-      setAboutDialogOpen(true);
+      navigate('/about');
     }
     setMenuOpen(false);
   }
@@ -985,7 +1074,7 @@ function App() {
                                 key={option.value}
                                 className={`filter-option-btn${selected ? ' is-selected' : ''}`}
                                 appearance="subtle"
-                                size="small"
+                                size="medium"
                                 role="radio"
                                 aria-checked={selected}
                                 onClick={() => {
@@ -1003,8 +1092,14 @@ function App() {
                   </span>
                 )}
                 placeholder="搜索歌曲..."
-                value={searchKeyword}
-                onChange={(_, data) => setSearchKeyword(data.value)}
+                value={searchInput}
+                onChange={(_, data) => setSearchInput(data.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    commitSearch(event.currentTarget.value);
+                  }
+                }}
               />
             </div>
           </div>
@@ -1036,17 +1131,16 @@ function App() {
             />
           </NavDrawerHeader>
           <NavDrawerBody>
-            <Nav onNavItemSelect={handleNavSelect} selectedValue="">
-              <NavItem value="upload" icon={<ArrowUploadRegular />}>上传谱面</NavItem>
-              <NavItem value="export" icon={<ArrowDownloadRegular />} disabled={!allResults.length}>导出定数</NavItem>
-              <NavItem value="about" icon={<InfoRegular />}>关于</NavItem>
+            <Nav onNavItemSelect={handleNavSelect} selectedValue={isAboutRoute ? 'about' : 'analysis'}>
+              <NavItem value="analysis" icon={<SearchRegular />}>谱面分析</NavItem>
+              <NavItem value="about" icon={<InfoRegular />}>帮助</NavItem>
             </Nav>
           </NavDrawerBody>
         </NavDrawer>
 
         <main className="content-area">
           <div
-            className={`results-panel${dragOver ? ' drag-over' : ''}`}
+            className={`results-panel${dragOver ? ' drag-over' : ''}${isRootRoute ? '' : ' route-panel-hidden'}`}
             onDragEnter={(e) => {
               e.preventDefault();
               setDragOver(true);
@@ -1062,11 +1156,23 @@ function App() {
               }
             }}
             onDrop={onDrop}
+            aria-hidden={!isRootRoute}
           >
-            <section className="list-info-bar">
-              <Body1 className="list-stat">歌曲数: {totalSongs}</Body1>
-              <Body1 className="list-stat">谱面数: {totalCharts}</Body1>
-            </section>
+            <header className="list-caption" aria-label="谱面列表说明与操作">
+              <Breadcrumb className="list-breadcrumb" aria-label="面包屑">
+                <BreadcrumbItem>
+                  <BreadcrumbButton current aria-current="page">谱面分析</BreadcrumbButton>
+                </BreadcrumbItem>
+              </Breadcrumb>
+              <Toolbar className="list-toolbar" aria-label="谱面列表工具栏">
+                <ToolbarButton className="list-toolbar-button" appearance="subtle" size="small" icon={<ArrowUploadRegular />} onClick={() => fileInputRef.current?.click()}>
+                  上传谱面
+                </ToolbarButton>
+                <ToolbarButton className="list-toolbar-button" appearance="subtle" size="small" disabled={!allResults.length} icon={<ArrowDownloadRegular />} onClick={exportResults}>
+                  导出定数
+                </ToolbarButton>
+              </Toolbar>
+            </header>
             {!filteredRows.length ? (
               <div className="drop-placeholder" role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()}>
                 <div className="drop-icon">📂</div>
@@ -1099,7 +1205,7 @@ function App() {
                   </DataGridHeader>
                   <DataGridBody>
                     {({ item, rowId }) => (
-                      <DataGridRow key={rowId} className="result-row" onClick={() => openGapModal(item)}>
+                      <DataGridRow key={rowId} className="result-row" onClick={() => openChartDetailPage(item)}>
                         {({ renderCell, columnId }) => (
                           <DataGridCell className={columnId === 'songName' ? 'sticky-first-col-cell' : ''}>
                             {renderCell(item)}
@@ -1112,7 +1218,27 @@ function App() {
               </div>
             )}
           </div>
+
+          {isAboutRoute ? <AboutPage footerInfo={footerInfo} isOffline={isOffline} onBack={() => navigate('/')} /> : null}
+          {isChartRoute ? <ChartDetailPage detail={selectedChartDetail} onBack={closeChartDetailPage} /> : null}
         </main>
+
+        {isRootRoute ? (
+          <footer className="app-footer" ref={footerRef}>
+            <div className="status-strip">
+              <div className="list-info-bar" role="status" aria-label="谱面列表统计信息">
+                <Body1 className="list-stat">
+                  <span className="list-stat-label">歌曲：</span>
+                  <span className="list-stat-value">{totalSongs}</span>
+                </Body1>
+                <Body1 className="list-stat">
+                  <span className="list-stat-label">谱面：</span>
+                  <span className="list-stat-value">{totalCharts}</span>
+                </Body1>
+              </div>
+            </div>
+          </footer>
+        ) : null}
 
         <input ref={fileInputRef} type="file" multiple className="hidden-input" onChange={onUploadInputChange} />
 
@@ -1132,76 +1258,6 @@ function App() {
           </DialogSurface>
         </Dialog>
 
-        <Dialog open={gapDialog.open} onOpenChange={(_, data) => !data.open && hideGapModal()}>
-          <DialogSurface className="gap-dialog-surface">
-            <DialogBody>
-              <DialogTitle>{gapDialog.title}</DialogTitle>
-              <DialogContent>
-                {gapDialog.stats ? (
-                  <div className="gap-stats">
-                    <Badge appearance="tint">音符数: {gapDialog.stats.totalNotes}</Badge>
-                    <Badge appearance="tint">平均间隔: {gapDialog.stats.avgGap} ms</Badge>
-                    <Badge appearance="tint">最小间隔: {gapDialog.stats.minGap} ms</Badge>
-                  </div>
-                ) : (
-                  <Body1 className="hint">无音符间隔数据</Body1>
-                )}
-                <div className="gap-list">
-                  {gapDialog.bars.map((bar) => (
-                    <div className="gap-bar" key={bar.label}>
-                      <span className="gap-bar-label">{bar.label}</span>
-                      {bar.values.map((value, idx) => (
-                        <span className={`gap-value ${value.className}`} key={`${bar.label}-${idx}`}>
-                          {value.text}
-                        </span>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </DialogContent>
-              <DialogActions>
-                <Button appearance="primary" onClick={hideGapModal}>关闭</Button>
-              </DialogActions>
-            </DialogBody>
-          </DialogSurface>
-        </Dialog>
-
-        <Dialog open={aboutDialogOpen} onOpenChange={(_, data) => setAboutDialogOpen(data.open)}>
-          <DialogSurface>
-            <DialogBody>
-              <DialogTitle>关于太鼓铺面难度分析</DialogTitle>
-              <DialogContent>
-                <Body1>
-                  这是一个用于分析太鼓谱面难度的工具，支持导入 TJA 谱面文件，自动计算体力、复合、节奏、手速与爆发等维度评分。
-                </Body1>
-                <Body1 style={{ marginTop: 8 }}>
-                  你可以通过上传或拖拽文件夹批量导入谱面，使用顶部筛选与搜索快速定位歌曲，并将计算结果导出为 CSV。
-                </Body1>
-                <div className="about-meta" style={{ marginTop: 12 }}>
-                  <div className="about-meta-line">部署时间: {footerInfo.timeStr}</div>
-                  <div className="about-meta-line">
-                    版本:
-                    {' '}
-                    <Link href={`https://github.com/Dafrok/taiko-rating-app/commit/${footerInfo.hash}`} target="_blank" rel="noreferrer">
-                      {footerInfo.hash}
-                    </Link>
-                  </div>
-                  <div className="about-meta-line">
-                    网络状态:
-                    {' '}
-                    <span className={`network-status ${isOffline ? 'is-offline' : 'is-online'}`}>
-                      {isOffline ? '当前离线（缓存模式）' : '在线'}
-                    </span>
-                  </div>
-                </div>
-              </DialogContent>
-              <DialogActions>
-                <Button appearance="primary" onClick={() => setAboutDialogOpen(false)}>关闭</Button>
-              </DialogActions>
-            </DialogBody>
-          </DialogSurface>
-        </Dialog>
-
         {isLoading ? (
           <div className="loading-overlay">
             <div className="loading-panel">
@@ -1214,4 +1270,8 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(
+  <BrowserRouter>
+    <App />
+  </BrowserRouter>
+);
