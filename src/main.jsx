@@ -820,7 +820,8 @@ function App() {
           category: song.category || '未知分类',
           songName: song.songName || '未知歌曲',
           data: normalizeSongJson(song.data),
-          songHash: song.songHash || ''
+          songHash: song.songHash || '',
+          tjaContent: typeof song.tjaContent === 'string' ? song.tjaContent : ''
         };
       })
       .filter(Boolean);
@@ -1239,7 +1240,8 @@ function App() {
         category: song.category,
         songName: song.songName,
         data: song.data,
-        songHash: song.songHash
+        songHash: song.songHash,
+        tjaContent: typeof song.tjaContent === 'string' ? song.tjaContent : ''
       }));
 
     const selectedSongHashSet = new Set(selectedSongs.map((song) => song.songHash).filter(Boolean));
@@ -1354,11 +1356,13 @@ function App() {
         let data;
         let preferredSongName = '';
         let preferredCategory = '';
+        let tjaContent = '';
 
         if (file.name.toLowerCase().endsWith('.tja')) {
           data = analyzeTjaToJson(text);
           preferredSongName = extractTjaTitle(text);
           preferredCategory = extractTjaGenre(text);
+          tjaContent = text;
         } else {
           data = JSON.parse(text);
         }
@@ -1372,7 +1376,7 @@ function App() {
 
         const { category, songName } = extractSongMeta(relativePath, file.name, preferredSongName, preferredCategory);
         const songHash = await hashText(`${relativePath}\n${text}`);
-        songs.push({ category, songName, data, songHash });
+        songs.push({ category, songName, data, songHash, tjaContent });
       } catch (error) {
         errors.push(`${relativePath}: ${error.message}`);
       }
