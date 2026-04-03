@@ -33,10 +33,9 @@ export async function initPyodide() {
       console.log('🐍 初始化 Pyodide...');
 
       await yieldToMain();
-
-      const { loadPyodide } = await import('https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.24.1/pyodide.mjs');
+      const { loadPyodide } = await import('https://dafrok.github.io/donder-assistant/pyodide/pyodide.mjs');
       await yieldToMain();
-      pyodide = await loadPyodide({ indexURL: '/pyodide/' });
+      pyodide = await loadPyodide({ indexURL: 'https://dafrok.github.io/donder-assistant/pyodide/' });
 
       console.log('✅ Pyodide 初始化完成');
       pyodideReady = true;
