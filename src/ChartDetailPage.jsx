@@ -124,6 +124,7 @@ function ChartDetailPage({ detail, chartId = '', onBack, isFavorite = false, onT
     startPoint: { x: 0, y: 0 }
   });
   const lastTapRef = useRef({ time: 0, x: 0, y: 0 });
+  const suppressDblClickUntilRef = useRef(0);
   const [previewError, setPreviewError] = useState('');
   const [overlayPreviewError, setOverlayPreviewError] = useState('');
   const [previewResizeTick, setPreviewResizeTick] = useState(0);
@@ -700,6 +701,7 @@ function ChartDetailPage({ detail, chartId = '', onBack, isFavorite = false, onT
             ? { x: touch.clientX - rect.left, y: touch.clientY - rect.top }
             : undefined;
           toggleOriginalAndFitScale(point);
+          suppressDblClickUntilRef.current = Date.now() + 450;
           lastTapRef.current = { time: 0, x: 0, y: 0 };
           return;
         }
@@ -896,6 +898,8 @@ function ChartDetailPage({ detail, chartId = '', onBack, isFavorite = false, onT
             className="chart-preview-route-viewport"
             onMouseDown={handleOverlayMouseDown}
             onDoubleClick={(event) => {
+              if (isCoarseInputDevice()) return;
+              if (Date.now() < suppressDblClickUntilRef.current) return;
               const rect = event.currentTarget.getBoundingClientRect();
               toggleOriginalAndFitScale({
                 x: event.clientX - rect.left,
