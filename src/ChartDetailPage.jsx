@@ -142,6 +142,7 @@ function ChartDetailPage({ detail, chartId = '', onBack, isFavorite = false, onT
   const pendingOverlayCommitRef = useRef({ scale: false, offset: false });
   const overlayRenderDebounceTimerRef = useRef(null);
   const wheelInteractionTimerRef = useRef(null);
+  const doubleTapToggleRafRef = useRef(0);
 
   const previewCanvasKey = useMemo(() => {
     if (!detail) return 'chart-preview-empty';
@@ -193,6 +194,10 @@ function ChartDetailPage({ detail, chartId = '', onBack, isFavorite = false, onT
       if (overlayTransformRafRef.current) {
         window.cancelAnimationFrame(overlayTransformRafRef.current);
         overlayTransformRafRef.current = 0;
+      }
+      if (doubleTapToggleRafRef.current) {
+        window.cancelAnimationFrame(doubleTapToggleRafRef.current);
+        doubleTapToggleRafRef.current = 0;
       }
     };
   }, []);
@@ -742,7 +747,14 @@ function ChartDetailPage({ detail, chartId = '', onBack, isFavorite = false, onT
           const point = rect
             ? { x: touch.clientX - rect.left, y: touch.clientY - rect.top }
             : undefined;
-          toggleOriginalAndFitScale(point);
+          // Run the toggle on next frame so `.is-direct-manipulating` is removed first.
+          if (doubleTapToggleRafRef.current) {
+            window.cancelAnimationFrame(doubleTapToggleRafRef.current);
+          }
+          doubleTapToggleRafRef.current = window.requestAnimationFrame(() => {
+            doubleTapToggleRafRef.current = 0;
+            toggleOriginalAndFitScale(point);
+          });
           suppressDblClickUntilRef.current = Date.now() + 450;
           lastTapRef.current = { time: 0, x: 0, y: 0 };
           return;
