@@ -13,9 +13,84 @@ import { VirtualizerScrollView } from '@fluentui/react-virtualizer';
 let constantsCache = null;
 const ROW_HEIGHT = 52;
 
+function getCategoryBadgeClass(category) {
+  const normalized = String(category || '').trim().toLowerCase();
+  if (!normalized) return '';
+
+  if (normalized.includes('children') || normalized.includes('folk')) {
+    return 'badge-children-folk';
+  }
+  if (normalized.includes('namco') || normalized.includes('original')) {
+    return 'badge-namco-original';
+  }
+  if (normalized.includes('game')) {
+    return 'badge-game-music';
+  }
+  if (normalized.includes('vocaloid')) {
+    return 'badge-vocaloid';
+  }
+  if (normalized.includes('anime')) {
+    return 'badge-anime';
+  }
+  if (normalized.includes('classical')) {
+    return 'badge-classical';
+  }
+  if (normalized.includes('variety') || normalized.includes('variaty')) {
+    return 'badge-variety';
+  }
+  if (normalized.includes('pop')) {
+    return 'badge-pop';
+  }
+
+  return '';
+}
+
+function getBranchTextClass(branch) {
+  const normalized = String(branch || '').trim().toLowerCase();
+  if (!normalized) return '';
+
+  if (normalized.includes('master') || normalized.includes('达人')) {
+    return 'constants-branch-master';
+  }
+  if (normalized.includes('expert') || normalized.includes('玄人')) {
+    return 'constants-branch-expert';
+  }
+  if (normalized.includes('normal') || normalized.includes('普通')) {
+    return 'constants-branch-normal';
+  }
+
+  return '';
+}
+
+function getDifficultyTextClass(difficulty) {
+  const normalized = String(difficulty || '').trim().toLowerCase();
+  if (!normalized) return '';
+
+  if (normalized.includes('edit') || normalized.includes('里')) {
+    return 'constants-difficulty-edit';
+  }
+  if (normalized.includes('oni') || normalized.includes('魔王')) {
+    return 'constants-difficulty-oni';
+  }
+  if (normalized.includes('hard') || normalized.includes('困难')) {
+    return 'constants-difficulty-hard';
+  }
+  if (normalized.includes('normal') || normalized.includes('普通')) {
+    return 'constants-difficulty-normal';
+  }
+  if (normalized.includes('easy') || normalized.includes('简单')) {
+    return 'constants-difficulty-easy';
+  }
+
+  return '';
+}
+
 const ConstantsVirtualList = memo(function ConstantsVirtualList({
   headers,
   filteredRows,
+  categoryColumnIndex,
+  difficultyColumnIndex,
+  branchColumnIndex,
   handleSort,
   renderSortIcon,
   openDetail
@@ -76,7 +151,21 @@ const ConstantsVirtualList = memo(function ConstantsVirtualList({
                     }
                     : undefined}
                 >
-                  {item.cells[columnIndex] || '-'}
+                  {columnIndex === categoryColumnIndex ? (
+                    <span className={`constants-category-badge ${getCategoryBadgeClass(item.cells[columnIndex])}`.trim()}>
+                      {item.cells[columnIndex] || '-'}
+                    </span>
+                  ) : columnIndex === difficultyColumnIndex ? (
+                    <span className={`constants-cell-text constants-difficulty-text ${getDifficultyTextClass(item.cells[columnIndex])}`.trim()}>
+                      {item.cells[columnIndex] || '-'}
+                    </span>
+                  ) : columnIndex === branchColumnIndex ? (
+                    <span className={`constants-branch-text ${getBranchTextClass(item.cells[columnIndex])}`.trim()}>
+                      {item.cells[columnIndex] || '-'}
+                    </span>
+                  ) : (
+                    <span className="constants-cell-text">{item.cells[columnIndex] || '-'}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -266,6 +355,9 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
   }, [deferredKeyword, rows, sortState]);
 
   const isSearchKeywordPending = searchKeyword !== appliedSearchKeyword;
+  const categoryColumnIndex = useMemo(() => findLastColumnIndex(headers, '分类'), [headers]);
+  const difficultyColumnIndex = useMemo(() => findLastColumnIndex(headers, '难度'), [headers]);
+  const branchColumnIndex = useMemo(() => findLastColumnIndex(headers, '分支'), [headers]);
 
   useEffect(() => {
     if (isActive && typeof onCountChange === 'function') {
@@ -352,6 +444,9 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
             <ConstantsVirtualList
               headers={headers}
               filteredRows={filteredRows}
+              categoryColumnIndex={categoryColumnIndex}
+              difficultyColumnIndex={difficultyColumnIndex}
+              branchColumnIndex={branchColumnIndex}
               handleSort={handleSort}
               renderSortIcon={renderSortIcon}
               openDetail={openDetail}

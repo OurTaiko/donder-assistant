@@ -687,16 +687,119 @@ body {
 
 .constants-virtual-row .constants-virtual-cell {
   border-bottom: 1px solid #f2e3d6;
-  align-items: flex-start;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  align-items: center;
   white-space: normal;
   line-height: 1.25;
+}
+
+.constants-cell-text {
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.constants-category-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  min-height: 24px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.constants-branch-text {
+  font-weight: 600;
+}
+
+.constants-difficulty-text {
+  font-weight: 700;
+}
+
+.constants-difficulty-text.constants-difficulty-easy {
+  color: #cf202f;
+}
+
+.constants-difficulty-text.constants-difficulty-normal {
+  color: #4d7f2f;
+}
+
+.constants-difficulty-text.constants-difficulty-hard {
+  color: #005a9c;
+}
+
+.constants-difficulty-text.constants-difficulty-oni {
+  color: #8f1d4f;
+}
+
+.constants-difficulty-text.constants-difficulty-edit {
+  color: #5c2d91;
+}
+
+.constants-branch-text.constants-branch-normal {
+  color: #667085;
+}
+
+.constants-branch-text.constants-branch-expert {
+  color: #0078d4;
+}
+
+.constants-branch-text.constants-branch-master {
+  color: #b42318;
+}
+
+.constants-category-badge.badge-pop {
+  color: #0f5877;
+  background: #d9f2ff;
+  border-color: #8bcfeb;
+}
+
+.constants-category-badge.badge-anime {
+  color: #8d3c59;
+  background: #ffe6ef;
+  border-color: #f2bbcf;
+}
+
+.constants-category-badge.badge-vocaloid {
+  color: #4f5864;
+  background: #eef1f4;
+  border-color: #d4dbe2;
+}
+
+.constants-category-badge.badge-children-folk {
+  color: #844b12;
+  background: #ffe1b3;
+  border-color: #ebb771;
+}
+
+.constants-category-badge.badge-variety {
+  color: #356e40;
+  background: #e6f6e8;
+  border-color: #b7deb8;
+}
+
+.constants-category-badge.badge-classical {
+  color: #7d680f;
+  background: #fff4c7;
+  border-color: #e6d07a;
+}
+
+.constants-category-badge.badge-game-music {
+  color: #5c3d9a;
+  background: #efe6ff;
+  border-color: #cab7ee;
+}
+
+.constants-category-badge.badge-namco-original {
+  color: #6a2608;
+  background: #ffc5a0;
+  border-color: #d47643;
 }
 
 .constants-virtual-scroll-root {
