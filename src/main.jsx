@@ -47,6 +47,7 @@ import {
   MoneyCalculator20Regular,
   MoneyCalculatorRegular,
   SearchRegular,
+  Target20Regular,
   StarFilled,
   StarRegular
 } from '@fluentui/react-icons';
@@ -1733,7 +1734,7 @@ function App() {
               <NavSectionHeader>出勤工具</NavSectionHeader>
               <NavItem value="singlePrice" icon={<MoneyCalculator20Regular />}>单曲价格速算</NavItem>
               <NavItem value="targetScore" icon={<Calculator20Regular />}>目标成绩速算</NavItem>
-              <NavItem value="practice" icon={<ArrowUploadRegular />}>练习模式</NavItem>
+              <NavItem value="practice" icon={<Target20Regular />}>特训</NavItem>
 
               <NavDivider />
               <NavItem value="about" icon={<Info20Regular />}>关于</NavItem>
