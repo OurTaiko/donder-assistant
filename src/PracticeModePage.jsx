@@ -1,4 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Input
+} from '@fluentui/react-components';
+import { DismissRegular } from '@fluentui/react-icons';
 import JSZip from 'jszip';
 import PracticeBreadcrumb from './practice-mode/PracticeBreadcrumb.jsx';
 import PracticeToolbar from './practice-mode/PracticeToolbar.jsx';
@@ -47,6 +58,11 @@ import {
   resolveTimelineAudioSync,
   summarizeResults
 } from './practice-mode-core.js';
+
+const PRACTICE_AUDIO_COMPENSATION_STORAGE_KEY = 'taiko-rating.practice.audio-compensation-ms.v1';
+const PRACTICE_TOUCH_DRUM_OFFSET_X_STORAGE_KEY = 'taiko-rating.practice.touch-drum-offset-x.v1';
+const PRACTICE_TOUCH_DRUM_OFFSET_Y_STORAGE_KEY = 'taiko-rating.practice.touch-drum-offset-y.v1';
+const PRACTICE_TOUCH_DRUM_SCALE_STORAGE_KEY = 'taiko-rating.practice.touch-drum-scale-percent.v1';
 
 function PracticeModePage() {
   const fileInputRef = useRef(null);
@@ -100,6 +116,69 @@ function PracticeModePage() {
   const [isMobileToolbar, setIsMobileToolbar] = useState(() => (
     typeof window !== 'undefined' ? window.innerWidth <= MOBILE_TOOLBAR_BREAKPOINT : false
   ));
+  const [touchAudioLatencyCompensationMs, setTouchAudioLatencyCompensationMs] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    const raw = window.localStorage.getItem(PRACTICE_AUDIO_COMPENSATION_STORAGE_KEY);
+    const parsed = Number.parseFloat(String(raw ?? '0'));
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  const [touchDrumOffsetX, setTouchDrumOffsetX] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    const raw = window.localStorage.getItem(PRACTICE_TOUCH_DRUM_OFFSET_X_STORAGE_KEY);
+    const parsed = Number.parseFloat(String(raw ?? '0'));
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  const [touchDrumOffsetY, setTouchDrumOffsetY] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    const raw = window.localStorage.getItem(PRACTICE_TOUCH_DRUM_OFFSET_Y_STORAGE_KEY);
+    const parsed = Number.parseFloat(String(raw ?? '0'));
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  const [touchDrumScalePercent, setTouchDrumScalePercent] = useState(() => {
+    if (typeof window === 'undefined') return 100;
+    const raw = window.localStorage.getItem(PRACTICE_TOUCH_DRUM_SCALE_STORAGE_KEY);
+    const parsed = Number.parseFloat(String(raw ?? '100'));
+    return Number.isFinite(parsed) ? parsed : 100;
+  });
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [compensationInputValue, setCompensationInputValue] = useState('0');
+  const [touchDrumOffsetXInputValue, setTouchDrumOffsetXInputValue] = useState('0');
+  const [touchDrumOffsetYInputValue, setTouchDrumOffsetYInputValue] = useState('0');
+  const [touchDrumScaleInputValue, setTouchDrumScaleInputValue] = useState('100');
+
+  const openSettingsDialog = useCallback(() => {
+    setCompensationInputValue(String(touchAudioLatencyCompensationMs));
+    setTouchDrumOffsetXInputValue(String(touchDrumOffsetX));
+    setTouchDrumOffsetYInputValue(String(touchDrumOffsetY));
+    setTouchDrumScaleInputValue(String(touchDrumScalePercent));
+    setIsSettingsDialogOpen(true);
+  }, [touchAudioLatencyCompensationMs, touchDrumOffsetX, touchDrumOffsetY, touchDrumScalePercent]);
+
+  const closeSettingsDialog = useCallback(() => {
+    setIsSettingsDialogOpen(false);
+  }, []);
+
+  const saveCompensationSetting = useCallback(() => {
+    const parsed = Number.parseFloat(String(compensationInputValue || '0'));
+    const safeValue = Number.isFinite(parsed) ? Math.max(-300, Math.min(300, parsed)) : 0;
+    const parsedOffsetX = Number.parseFloat(String(touchDrumOffsetXInputValue || '0'));
+    const parsedOffsetY = Number.parseFloat(String(touchDrumOffsetYInputValue || '0'));
+    const parsedScale = Number.parseFloat(String(touchDrumScaleInputValue || '100'));
+    const safeOffsetX = Number.isFinite(parsedOffsetX) ? Math.max(-300, Math.min(300, parsedOffsetX)) : 0;
+    const safeOffsetY = Number.isFinite(parsedOffsetY) ? Math.max(-300, Math.min(300, parsedOffsetY)) : 0;
+    const safeScale = Number.isFinite(parsedScale) ? Math.max(10, Math.min(500, parsedScale)) : 100;
+    setTouchAudioLatencyCompensationMs(safeValue);
+    setTouchDrumOffsetX(safeOffsetX);
+    setTouchDrumOffsetY(safeOffsetY);
+    setTouchDrumScalePercent(safeScale);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(PRACTICE_AUDIO_COMPENSATION_STORAGE_KEY, String(safeValue));
+      window.localStorage.setItem(PRACTICE_TOUCH_DRUM_OFFSET_X_STORAGE_KEY, String(safeOffsetX));
+      window.localStorage.setItem(PRACTICE_TOUCH_DRUM_OFFSET_Y_STORAGE_KEY, String(safeOffsetY));
+      window.localStorage.setItem(PRACTICE_TOUCH_DRUM_SCALE_STORAGE_KEY, String(safeScale));
+    }
+    setIsSettingsDialogOpen(false);
+  }, [compensationInputValue, touchDrumOffsetXInputValue, touchDrumOffsetYInputValue, touchDrumScaleInputValue]);
 
   const summary = useMemo(() => summarizeResults(notes), [notes]);
   const ngCount = useMemo(() => summary.bad + summary.miss, [summary.bad, summary.miss]);
@@ -636,19 +715,19 @@ function PracticeModePage() {
 
   const getCurrentChartTimeMs = useCallback(() => {
     const nowPerf = performance.now();
-    let current = nowPerf - playStartRef.current + audioSyncOffsetMs;
+    let current = nowPerf - playStartRef.current + audioSyncOffsetMs - touchAudioLatencyCompensationMs;
 
     if (audioRef.current && audioObjectUrl) {
       // Keep using the pre-roll clock until the audio handoff timer finishes.
       if (scheduledStartRef.current) {
-        current = nowPerf - scheduledStartRef.current + audioSyncOffsetMs;
+        current = nowPerf - scheduledStartRef.current + audioSyncOffsetMs - touchAudioLatencyCompensationMs;
       } else if (!audioRef.current.paused && Number.isFinite(audioRef.current.currentTime)) {
-        current = audioRef.current.currentTime * 1000 + audioSyncOffsetMs;
+        current = audioRef.current.currentTime * 1000 + audioSyncOffsetMs - touchAudioLatencyCompensationMs;
       }
     }
 
     return current;
-  }, [audioObjectUrl, audioSyncOffsetMs]);
+  }, [audioObjectUrl, audioSyncOffsetMs, touchAudioLatencyCompensationMs]);
 
   const runFrame = useCallback(() => {
     const current = getCurrentChartTimeMs();
@@ -815,11 +894,11 @@ function PracticeModePage() {
       pendingResetAfterSeekRef.current = false;
     }
 
-    playStartRef.current = performance.now() - (resumeFromMs - audioSyncOffsetMs);
+    playStartRef.current = performance.now() - (resumeFromMs + touchAudioLatencyCompensationMs - audioSyncOffsetMs);
     scheduledStartRef.current = 0;
 
     if (audioRef.current && audioObjectUrl) {
-      const nextAudioTime = Math.max(0, (resumeFromMs - audioSyncOffsetMs) / 1000);
+      const nextAudioTime = Math.max(0, (resumeFromMs + touchAudioLatencyCompensationMs - audioSyncOffsetMs) / 1000);
       audioRef.current.currentTime = nextAudioTime;
       audioRef.current.muted = false;
       audioRef.current.play().catch(() => {
@@ -831,7 +910,7 @@ function PracticeModePage() {
     setIsPlaying(true);
     setStatusText('继续播放。');
     rafRef.current = requestAnimationFrame(runFrame);
-  }, [isPaused, notes.length, chartStartOffsetMs, barLines, audioObjectUrl, audioSyncOffsetMs, runFrame, startPlayback]);
+  }, [isPaused, notes.length, chartStartOffsetMs, barLines, audioObjectUrl, audioSyncOffsetMs, touchAudioLatencyCompensationMs, runFrame, startPlayback]);
 
   const seekToChartTime = useCallback((targetMs) => {
     if (!Number.isFinite(targetMs)) return;
@@ -841,15 +920,15 @@ function PracticeModePage() {
     pausedAtMsRef.current = clamped;
 
     if (audioRef.current && audioObjectUrl) {
-      const nextAudioTime = Math.max(0, (clamped - audioSyncOffsetMs) / 1000);
+      const nextAudioTime = Math.max(0, (clamped + touchAudioLatencyCompensationMs - audioSyncOffsetMs) / 1000);
       audioRef.current.currentTime = nextAudioTime;
     }
 
     if (isPlaying) {
-      playStartRef.current = performance.now() - (clamped - audioSyncOffsetMs);
+      playStartRef.current = performance.now() - (clamped + touchAudioLatencyCompensationMs - audioSyncOffsetMs);
       scheduledStartRef.current = 0;
     }
-  }, [audioObjectUrl, audioSyncOffsetMs, chartStartOffsetMs, durationMs, isPlaying]);
+  }, [audioObjectUrl, audioSyncOffsetMs, touchAudioLatencyCompensationMs, chartStartOffsetMs, durationMs, isPlaying]);
 
   const seekByBarLine = useCallback((direction) => {
     if (!notes.length || !isPaused) return;
@@ -1005,15 +1084,20 @@ function PracticeModePage() {
     const visualPadding = 18;
     const pulseScaleSafety = 1.05;
     const outerEffectSafety = 18;
-    const safeRadiusByWidth = (width / 2 - visualPadding - outerEffectSafety) / pulseScaleSafety;
-    const safeRadiusByHeight = (height / 2 - visualPadding - outerEffectSafety) / pulseScaleSafety;
-    const arcRadius = Math.max(24, Math.min(width * 0.32, height * 0.42, safeRadiusByWidth, safeRadiusByHeight));
+    const defaultSafeRadiusByWidth = (width / 2 - visualPadding - outerEffectSafety) / pulseScaleSafety;
+    const defaultSafeRadiusByHeight = (height / 2 - visualPadding - outerEffectSafety) / pulseScaleSafety;
+    const baseRadius = Math.max(24, Math.min(width * 0.32, height * 0.42, defaultSafeRadiusByWidth, defaultSafeRadiusByHeight));
+    const centerX = Math.max(0, Math.min(width, width / 2 + touchDrumOffsetX));
+    const centerY = Math.max(0, Math.min(height, height / 2 + touchDrumOffsetY));
+
+    const scaledRadius = baseRadius * (touchDrumScalePercent / 100);
+    const arcRadius = Math.max(8, scaledRadius);
     return {
-      centerX: width / 2,
-      centerY: height / 2,
+      centerX,
+      centerY,
       radius: arcRadius
     };
-  }, []);
+  }, [touchDrumOffsetX, touchDrumOffsetY, touchDrumScalePercent]);
 
   const triggerInputFeedback = useCallback((inputType) => {
     const now = performance.now();
@@ -2161,11 +2245,84 @@ function PracticeModePage() {
           onReset={resetPlayback}
           notesLength={notes.length}
           isPaused={isPaused}
+          onOpenSettings={openSettingsDialog}
           availableBranches={availableBranches}
           branchSelection={branchSelection}
           isPlaying={isPlaying}
           onBranchSelectionChange={setBranchSelection}
         />
+
+        <Dialog open={isSettingsDialogOpen} onOpenChange={(_, data) => setIsSettingsDialogOpen(Boolean(data?.open))}>
+          <DialogSurface>
+            <DialogBody className="practice-settings-dialog-body">
+              <Button
+                className="practice-settings-close-button"
+                appearance="subtle"
+                size="small"
+                shape="circular"
+                icon={<DismissRegular />}
+                aria-label="关闭设置"
+                title="关闭"
+                onClick={closeSettingsDialog}
+              />
+              <DialogTitle>设置</DialogTitle>
+              <DialogContent>
+                <div className="practice-settings-form">
+                  <div className="practice-setting-item">
+                    <label className="practice-setting-label" htmlFor="practice-audio-compensation-input">判定补偿</label>
+                    <Input
+                      id="practice-audio-compensation-input"
+                      type="number"
+                      value={compensationInputValue}
+                      onChange={(_, data) => setCompensationInputValue(String(data?.value ?? ''))}
+                      contentAfter="ms"
+                    />
+                    <p className="practice-setting-help">正数会让判定稍微更晚，负数会更早。默认 0，范围 -300 到 300。当前：{touchAudioLatencyCompensationMs} ms</p>
+                  </div>
+
+                  <div className="practice-setting-item">
+                    <label className="practice-setting-label" htmlFor="practice-drum-offset-x-input">鼓面位置 X 偏移</label>
+                    <Input
+                      id="practice-drum-offset-x-input"
+                      type="number"
+                      value={touchDrumOffsetXInputValue}
+                      onChange={(_, data) => setTouchDrumOffsetXInputValue(String(data?.value ?? ''))}
+                      contentAfter="px"
+                    />
+                    <p className="practice-setting-help">只移动位置，不改变大小。默认 0，范围 -300 到 300。当前：{touchDrumOffsetX}px</p>
+                  </div>
+
+                  <div className="practice-setting-item">
+                    <label className="practice-setting-label" htmlFor="practice-drum-offset-y-input">鼓面位置 Y 偏移</label>
+                    <Input
+                      id="practice-drum-offset-y-input"
+                      type="number"
+                      value={touchDrumOffsetYInputValue}
+                      onChange={(_, data) => setTouchDrumOffsetYInputValue(String(data?.value ?? ''))}
+                      contentAfter="px"
+                    />
+                    <p className="practice-setting-help">只移动位置，不改变大小。默认 0，范围 -300 到 300。当前：{touchDrumOffsetY}px</p>
+                  </div>
+
+                  <div className="practice-setting-item">
+                    <label className="practice-setting-label" htmlFor="practice-drum-scale-input">鼓面缩放</label>
+                    <Input
+                      id="practice-drum-scale-input"
+                      type="number"
+                      value={touchDrumScaleInputValue}
+                      onChange={(_, data) => setTouchDrumScaleInputValue(String(data?.value ?? ''))}
+                      contentAfter="%"
+                    />
+                    <p className="practice-setting-help">仅控制大小。默认 100%，范围 10% 到 500%。当前：{touchDrumScalePercent}%</p>
+                  </div>
+                </div>
+              </DialogContent>
+              <DialogActions>
+                <Button appearance="primary" onClick={saveCompensationSetting}>保存</Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
 
         <PracticeStage
           onPointerDown={handlePracticePointerDown}

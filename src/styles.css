@@ -2076,6 +2076,45 @@ body {
   font-weight: 700;
 }
 
+.practice-settings-form {
+  display: grid;
+  gap: 14px;
+}
+
+.practice-settings-dialog-body {
+  position: relative;
+  padding-top: 8px;
+}
+
+.practice-settings-close-button {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  min-width: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.practice-setting-item {
+  display: grid;
+  gap: 6px;
+}
+
+.practice-setting-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2633;
+}
+
+.practice-setting-help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #5f7387;
+}
+
 .practice-frame-wrap {
   position: relative;
   flex: 1 1 auto;

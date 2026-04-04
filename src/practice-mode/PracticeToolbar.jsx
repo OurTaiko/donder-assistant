@@ -31,6 +31,7 @@ function PracticeToolbar({
   onReset,
   notesLength,
   isPaused,
+  onOpenSettings,
   availableBranches,
   branchSelection,
   isPlaying,
@@ -82,6 +83,14 @@ function PracticeToolbar({
         title="重置"
       >
         {isMobileToolbar ? null : '重置'}
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={onOpenSettings}
+        icon={isMobileToolbar ? '⚙' : undefined}
+        aria-label="设置"
+        title="设置"
+      >
+        {isMobileToolbar ? null : '设置'}
       </ToolbarButton>
 
       {availableBranches.length > 0 ? (
