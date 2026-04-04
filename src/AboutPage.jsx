@@ -136,37 +136,30 @@ function AboutPage({ footerInfo, isOffline, onBack }) {
         </Breadcrumb>
       </header>
       <div className="table-wrapper" style={{ padding: 16 }}>
-        <section aria-label="这是个什么工具">
-          <h3 style={{ margin: 0, fontSize: 16 }}>这是个什么工具</h3>
+        <section aria-label="工具简介">
+          <h3 style={{ margin: 0, fontSize: 16 }}>工具简介</h3>
           <Body1 style={{ marginTop: 8 }}>
-            Donder Assistant 是给太鼓爱好者做的免费小工具，主打一个开箱即用：打开网页就能做谱面分析、查定数、算出勤。
+            Donder Assistant 是面向鼓众的免费工具，提供谱面分析、定数查询与出勤测算等功能，打开网页即可使用，并可安装至桌面以便快速访问。
           </Body1>
         </section>
 
-        <section aria-label="你可以用它做什么" style={{ marginTop: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>你可以用它做什么</h3>
-          <Body1 style={{ marginTop: 8 }}>
-            在“谱面分析”里，你可以直接上传或拖拽 .tja 文件/文件夹，自动算出体力、复合、节奏、手速、爆发等指标，也能搜索、按难度筛选、排序，还能导出 CSV。
-          </Body1>
-          <Body1 style={{ marginTop: 8 }}>
-            点开任意谱面还能看详情：音符间隔统计、分段明细、谱面预览都在里面。预览支持全屏、缩放、拖动，也可以保存图片。
+        <section aria-label="功能说明" style={{ marginTop: 14 }}>
+          <h3 style={{ margin: 0, fontSize: 16 }}>功能说明</h3>
+          <Body1 style={{ marginTop: 8, whiteSpace: 'pre-line' }}>
+            {`在“谱面分析”模块中，您可直接上传或拖拽 .tja 文件及文件夹，系统将自动计算体力、复合、节奏、手速、爆发等指标，并提供搜索、难度筛选、排序及 CSV 导出功能。
+
+进入任意谱面详情后，可在同一页面查看音符间隔统计、分段明细与谱面预览。预览支持全屏、缩放与拖动，并可导出为图片。
+
+“定数表”模块聚焦内置曲目数据检索，支持基于关键词快速定位；进入详情后，可通过五维雷达图进行横向对比分析。
+
+“出勤工具”提供单曲价格速算与目标成绩速算能力，可用于日常成本测算与目标规划。`}
           </Body1>
         </section>
 
-        <section aria-label="查表和日常速算" style={{ marginTop: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>查表和日常速算</h3>
+        <section aria-label="本地安装与离线" style={{ marginTop: 14 }}>
+          <h3 style={{ margin: 0, fontSize: 16 }}>本地安装与离线</h3>
           <Body1 style={{ marginTop: 8 }}>
-            “定数表”可以快速检索内置数据，点进详情还能看五维雷达图，方便横向对比。
-          </Body1>
-          <Body1 style={{ marginTop: 8 }}>
-            “出勤工具”里有单曲价格速算和目标成绩速算，日常算账、算目标时会省很多事。
-          </Body1>
-        </section>
-
-        <section aria-label="一点小贴士" style={{ marginTop: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>一点小贴士</h3>
-          <Body1 style={{ marginTop: 8 }}>
-            收藏和部分数据会缓存在本地（localStorage / IndexedDB）。就算临时断网，也能继续看已加载内容；网络恢复后状态会自动更新。
+            本工具支持以 PWA 形式安装到本地桌面或主屏，安装后可像本地应用一样快速启动并直接使用。应用会缓存必要页面与数据（localStorage / IndexedDB），在离线或弱网场景下仍可访问已加载内容；网络恢复后会自动同步更新状态。
           </Body1>
         </section>
 
