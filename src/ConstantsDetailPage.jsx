@@ -11,6 +11,78 @@ import {
 
 const CONSTANTS_MAX_VALUE = 15.5;
 
+function getCategoryBadgeClass(category) {
+  const normalized = String(category || '').trim().toLowerCase();
+  if (!normalized) return '';
+
+  if (normalized.includes('children') || normalized.includes('folk')) {
+    return 'badge-children-folk';
+  }
+  if (normalized.includes('namco') || normalized.includes('original')) {
+    return 'badge-namco-original';
+  }
+  if (normalized.includes('game')) {
+    return 'badge-game-music';
+  }
+  if (normalized.includes('vocaloid')) {
+    return 'badge-vocaloid';
+  }
+  if (normalized.includes('anime')) {
+    return 'badge-anime';
+  }
+  if (normalized.includes('classical')) {
+    return 'badge-classical';
+  }
+  if (normalized.includes('variety') || normalized.includes('variaty')) {
+    return 'badge-variety';
+  }
+  if (normalized.includes('pop')) {
+    return 'badge-pop';
+  }
+
+  return '';
+}
+
+function getDifficultyTextClass(difficulty) {
+  const normalized = String(difficulty || '').trim().toLowerCase();
+  if (!normalized) return '';
+
+  if (normalized.includes('edit') || normalized.includes('里')) {
+    return 'constants-difficulty-edit';
+  }
+  if (normalized.includes('oni') || normalized.includes('魔王')) {
+    return 'constants-difficulty-oni';
+  }
+  if (normalized.includes('hard') || normalized.includes('困难')) {
+    return 'constants-difficulty-hard';
+  }
+  if (normalized.includes('normal') || normalized.includes('普通')) {
+    return 'constants-difficulty-normal';
+  }
+  if (normalized.includes('easy') || normalized.includes('简单')) {
+    return 'constants-difficulty-easy';
+  }
+
+  return '';
+}
+
+function getBranchTextClass(branch) {
+  const normalized = String(branch || '').trim().toLowerCase();
+  if (!normalized) return '';
+
+  if (normalized.includes('master') || normalized.includes('达人')) {
+    return 'constants-branch-master';
+  }
+  if (normalized.includes('expert') || normalized.includes('玄人')) {
+    return 'constants-branch-expert';
+  }
+  if (normalized.includes('normal') || normalized.includes('普通')) {
+    return 'constants-branch-normal';
+  }
+
+  return '';
+}
+
 function polarToCartesian(cx, cy, radius, angleDeg) {
   const rad = (angleDeg * Math.PI) / 180;
   return {
@@ -128,9 +200,19 @@ function ConstantsDetailPage({ detail, onBack }) {
           <div className="constants-detail-left-column">
             <div className="constants-detail-info-card">
               <Title3 className="constants-detail-title">{detail.songName || '未知歌曲'}</Title3>
-              <Body1 className="constants-detail-meta">分类：{detail.category || '-'}</Body1>
-              <Body1 className="constants-detail-meta">难度：{detail.difficulty || '-'}</Body1>
-              <Body1 className="constants-detail-meta">分支：{detail.branch || '-'}</Body1>
+              <Body1 className="constants-detail-meta">
+                <span className="constants-detail-meta-inline" aria-label="分类难度分支">
+                  <span className={`constants-detail-meta-item constants-category-badge ${getCategoryBadgeClass(detail.category)}`.trim()}>
+                    {detail.category || '-'}
+                  </span>
+                  <span className={`constants-detail-meta-item constants-difficulty-text ${getDifficultyTextClass(detail.difficulty)}`.trim()}>
+                    {detail.difficulty || '-'}
+                  </span>
+                  <span className={`constants-detail-meta-item constants-branch-text ${getBranchTextClass(detail.branch)}`.trim()}>
+                    {detail.branch || '-'}
+                  </span>
+                </span>
+              </Body1>
             </div>
 
             <div className="constants-detail-score-list">

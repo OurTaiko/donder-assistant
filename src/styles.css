@@ -914,6 +914,18 @@ body {
   color: #4d6172;
 }
 
+.constants-detail-meta-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.constants-detail-meta-item {
+  display: inline-flex;
+  align-items: center;
+}
+
 .constants-detail-radar-card {
   padding: 14px;
   min-width: 0;
