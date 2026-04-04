@@ -705,6 +705,7 @@ function App() {
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [hideTopBarTitle, setHideTopBarTitle] = useState(false);
   const [constantsVisibleCount, setConstantsVisibleCount] = useState(0);
+  const [constantsTotalCount, setConstantsTotalCount] = useState(0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [errorDialog, setErrorDialog] = useState({ open: false, title: '数据导入失败', message: '' });
   const [hasFavoriteCache, setHasFavoriteCache] = useState(() => {
@@ -1772,7 +1773,7 @@ function App() {
                 </ToolbarButton>
               </Toolbar>
             </header>
-            {!filteredRows.length ? (
+            {!allResults.length ? (
               <div className="drop-placeholder" role="button" tabIndex={0} onClick={() => fileInputRef.current?.click()}>
                 <div className="drop-icon">📂</div>
                 <Body1>点击或拖拽上传 TJA 文件或文件夹</Body1>
@@ -1800,36 +1801,42 @@ function App() {
                       ))}
                     </div>
                   </div>
-                  <VirtualizerScrollView
-                    className="analysis-virtual-scroll-root"
-                    container={{ className: 'analysis-virtual-scroll-container' }}
-                    numItems={filteredRows.length}
-                    itemSize={ANALYSIS_ROW_HEIGHT}
-                    axis="vertical"
-                  >
-                    {(index) => {
-                      const item = filteredRows[index];
-                      if (!item) return null;
+                  {filteredRows.length === 0 ? (
+                    <div className="analysis-virtual-scroll-root" aria-label="空列表">
+                      <div className="analysis-virtual-scroll-container" />
+                    </div>
+                  ) : (
+                    <VirtualizerScrollView
+                      className="analysis-virtual-scroll-root"
+                      container={{ className: 'analysis-virtual-scroll-container' }}
+                      numItems={filteredRows.length}
+                      itemSize={ANALYSIS_ROW_HEIGHT}
+                      axis="vertical"
+                    >
+                      {(index) => {
+                        const item = filteredRows[index];
+                        if (!item) return null;
 
-                      return (
-                        <div key={item.id} className="result-row analysis-virtual-row" role="row" onClick={() => openChartDetailPage(item)}>
-                          {analysisColumns.map((column, columnIndex) => (
-                            <div
-                              key={`${item.id}-${column.id}`}
-                              role="gridcell"
-                              aria-colindex={columnIndex + 1}
-                              className={`${column.className || ''} analysis-virtual-cell`.trim()}
-                              style={column.style}
-                            >
-                              {column.id === 'favorite'
-                                ? column.renderCell(item)
-                                : <span className="analysis-cell-text">{column.renderCell(item)}</span>}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    }}
-                  </VirtualizerScrollView>
+                        return (
+                          <div key={item.id} className="result-row analysis-virtual-row" role="row" onClick={() => openChartDetailPage(item)}>
+                            {analysisColumns.map((column, columnIndex) => (
+                              <div
+                                key={`${item.id}-${column.id}`}
+                                role="gridcell"
+                                aria-colindex={columnIndex + 1}
+                                className={`${column.className || ''} analysis-virtual-cell`.trim()}
+                                style={column.style}
+                              >
+                                {column.id === 'favorite'
+                                  ? column.renderCell(item)
+                                  : <span className="analysis-cell-text">{column.renderCell(item)}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }}
+                    </VirtualizerScrollView>
+                  )}
                 </div>
               </div>
             )}
@@ -1839,7 +1846,10 @@ function App() {
           <div className={`constants-route-panel${isConstantsRoute ? '' : ' route-panel-hidden'}`} aria-hidden={!isConstantsRoute}>
             <ConstantsTablePage
               searchKeyword={searchKeyword}
-              onCountChange={setConstantsVisibleCount}
+              onCountChange={(visibleCount, totalCount) => {
+                setConstantsVisibleCount(visibleCount);
+                setConstantsTotalCount(typeof totalCount === 'number' ? totalCount : 0);
+              }}
               onOpenDetail={openConstantsDetail}
               isActive={isConstantsRoute}
             />
@@ -1877,7 +1887,7 @@ function App() {
                     <span className="list-stat-value">{filteredRows.length}</span>
                     {filteredRows.length < totalCharts ? (
                       <span style={{ fontSize: '12px', color: '#767676', marginLeft: '8px' }}>
-                        (过滤后 / 全部 {totalCharts})
+                        （当前显示 {filteredRows.length} / 总谱面 {totalCharts}）
                       </span>
                     ) : null}
                   </Body1>
@@ -1888,6 +1898,9 @@ function App() {
                   <Body1 className="list-stat">
                     <span className="list-stat-label">条目：</span>
                     <span className="list-stat-value">{constantsVisibleCount}</span>
+                    <span style={{ fontSize: '12px', color: '#767676', marginLeft: '8px' }}>
+                      （当前显示 {constantsVisibleCount} / 总条目 {constantsTotalCount}）
+                    </span>
                   </Body1>
                 </div>
               ) : null}

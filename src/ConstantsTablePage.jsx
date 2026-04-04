@@ -373,9 +373,9 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
 
   useEffect(() => {
     if (isActive && typeof onCountChange === 'function') {
-      onCountChange(filteredRows.length);
+      onCountChange(filteredRows.length, rows.length);
     }
-  }, [filteredRows.length, onCountChange, isActive]);
+  }, [filteredRows.length, rows.length, onCountChange, isActive]);
 
   const handleSort = useCallback((columnIndex) => {
     scheduleListUpdate(() => {
