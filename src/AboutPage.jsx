@@ -143,19 +143,6 @@ function AboutPage({ footerInfo, isOffline, onBack }) {
           </Body1>
         </section>
 
-        <section aria-label="功能说明" style={{ marginTop: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>功能说明</h3>
-          <Body1 style={{ marginTop: 8, whiteSpace: 'pre-line' }}>
-            {`在“谱面分析”模块中，您可直接上传或拖拽 .tja 文件及文件夹，系统将自动计算体力、复合、节奏、手速、爆发等指标，并提供搜索、难度筛选、排序及 CSV 导出功能。
-
-进入任意谱面详情后，可在同一页面查看音符间隔统计、分段明细与谱面预览。预览支持全屏、缩放与拖动，并可导出为图片。
-
-“定数表”模块聚焦内置曲目数据检索，支持基于关键词快速定位；进入详情后，可通过五维雷达图进行横向对比分析。
-
-“出勤工具”提供单曲价格速算与目标成绩速算能力，可用于日常成本测算与目标规划。`}
-          </Body1>
-        </section>
-
         <section aria-label="本地安装与离线" style={{ marginTop: 14 }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>本地安装与离线</h3>
           <Body1 style={{ marginTop: 8 }}>
