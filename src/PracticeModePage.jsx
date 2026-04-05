@@ -1843,8 +1843,8 @@ function PracticeModePage() {
       ? `${progressPercent}%  ${currentBar}/${totalBars} 小节`
       : `${progressPercent}%  -/- 小节`;
     const driftText = Number.isFinite(clockDriftMs)
-      ? `体感偏差 ${clockDriftMs > 0 ? '+' : ''}${clockDriftMs}ms`
-      : '体感偏差 --ms';
+      ? `延迟 ${clockDriftMs > 0 ? '+' : ''}${clockDriftMs}ms`
+      : '延迟 --ms';
     const laneInfoText = isDriftMonitorVisible ? `${progressText}  ${driftText}` : progressText;
 
     ctx.fillStyle = '#b83a10';
@@ -2726,7 +2726,7 @@ function PracticeModePage() {
                       label={showDriftMonitorInputValue ? '显示' : '隐藏'}
                       onChange={(_, data) => setShowDriftMonitorInputValue(Boolean(data?.checked))}
                     />
-                    <p className="practice-setting-help">显示后会在进度旁标注修正后的实时体感偏差毫秒值；越接近 0 通常越容易打准判定。</p>
+                    <p className="practice-setting-help">显示后会在进度旁标注修正后的实时延迟毫秒值；越接近 0 通常越容易打准判定。</p>
                   </div>
                 </div>
               </DialogContent>
