@@ -123,7 +123,6 @@ function PracticeModePage() {
   const [rollBalloonHits, setRollBalloonHits] = useState(0);
   const [streakHits, setStreakHits] = useState(0);
   const [balloons, setBalloons] = useState([]);
-  const [scrollAnchors, setScrollAnchors] = useState([]);
   const [durationMs, setDurationMs] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -764,7 +763,6 @@ function PracticeModePage() {
       setRollBalloonHits(0);
       setStreakHits(0);
       setBalloons([]);
-      setScrollAnchors([]);
       setDurationMs(0);
       setScrollPxPerMs(DEFAULT_NOTE_SCROLL_PX_PER_MS);
       setAudioSyncOffsetMs(0);
@@ -785,7 +783,6 @@ function PracticeModePage() {
     setRollBalloonHits(0);
     setStreakHits(0);
     setBalloons(timeline.balloons || []);
-    setScrollAnchors(timeline.scrollAnchors || []);
     setDurationMs(timeline.durationMs || 0);
     setScrollPxPerMs(computeScrollPxPerMsByBpm(getChartReferenceBpm(resolvedChart)));
     setAudioSyncOffsetMs(nextAudioSyncOffsetMs);
@@ -1397,7 +1394,6 @@ function PracticeModePage() {
     setBarLines(timeline.barLines || []);
     setRolls(timeline.rolls || []);
     setBalloons(timeline.balloons || []);
-    setScrollAnchors(timeline.scrollAnchors || []);
     setRollBalloonHits(0);
     setStreakHits(0);
     setDurationMs(timeline.durationMs);
@@ -1479,7 +1475,6 @@ function PracticeModePage() {
       setBarLines([]);
       setRolls([]);
       setBalloons([]);
-      setScrollAnchors([]);
       setRollBalloonHits(0);
       setStreakHits(0);
       setDurationMs(0);
@@ -1496,116 +1491,43 @@ function PracticeModePage() {
     }
   }, [stopLoop, stopAudioPlayback, importFromZip, applyImportedTjaText, replaceAudioObjectUrl]);
 
-  const scrollTimelineIntegral = useMemo(() => {
-    const validAnchors = (scrollAnchors || [])
-      .filter((anchor) => Number.isFinite(anchor?.timeMs) && Number.isFinite(anchor?.scroll))
-      .sort((a, b) => a.timeMs - b.timeMs);
-
-    if (!validAnchors.length) {
-      return {
-        times: [0],
-        scrolls: [1],
-        areas: [0]
-      };
-    }
-
-    const dedupedAnchors = [];
-    for (const anchor of validAnchors) {
-      const last = dedupedAnchors[dedupedAnchors.length - 1];
-      if (last && Math.abs(last.timeMs - anchor.timeMs) < 0.0001) {
-        last.scroll = anchor.scroll;
-      } else {
-        dedupedAnchors.push({
-          timeMs: anchor.timeMs,
-          scroll: anchor.scroll
-        });
-      }
-    }
-
-    const times = dedupedAnchors.map((anchor) => anchor.timeMs);
-    const scrolls = dedupedAnchors.map((anchor) => anchor.scroll);
-    const areas = new Array(dedupedAnchors.length).fill(0);
-
-    for (let i = 1; i < dedupedAnchors.length; i += 1) {
-      const deltaMs = times[i] - times[i - 1];
-      areas[i] = areas[i - 1] + deltaMs * scrolls[i - 1];
-    }
-
-    return {
-      times,
-      scrolls,
-      areas
-    };
-  }, [scrollAnchors]);
-
-  const getScrollIntegralAt = useCallback((timeMs) => {
-    if (!Number.isFinite(timeMs)) return 0;
-    const { times, scrolls, areas } = scrollTimelineIntegral;
-    if (!times.length) {
-      return timeMs;
-    }
-
-    const firstTime = times[0];
-    if (timeMs <= firstTime) {
-      return (timeMs - firstTime) * scrolls[0];
-    }
-
-    const lastIndex = times.length - 1;
-    if (timeMs >= times[lastIndex]) {
-      return areas[lastIndex] + (timeMs - times[lastIndex]) * scrolls[lastIndex];
-    }
-
-    let low = 0;
-    let high = lastIndex;
-    while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
-      if (times[mid] <= timeMs) {
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
-
-    const segmentIndex = Math.max(0, Math.min(lastIndex, high));
-    return areas[segmentIndex] + (timeMs - times[segmentIndex]) * scrolls[segmentIndex];
-  }, [scrollTimelineIntegral]);
-
-  const getLaneXAtTime = useCallback((targetTimeMs, currentTimeMs) => {
-    if (!Number.isFinite(targetTimeMs) || !Number.isFinite(currentTimeMs)) {
-      return LANE_TARGET_X;
-    }
-    const travel = getScrollIntegralAt(targetTimeMs) - getScrollIntegralAt(currentTimeMs);
-    return LANE_TARGET_X + travel * scrollPxPerMs;
-  }, [getScrollIntegralAt, scrollPxPerMs]);
-
   const visibleNotes = useMemo(() => {
     return notes
       .filter((note) => note.timeMs >= suppressNotesBeforeMsRef.current)
       .filter((note) => !note.judged || note.result === 'miss')
       .map((note) => {
-        const x = getLaneXAtTime(note.timeMs, nowMs);
+        const noteScroll = Number.isFinite(note.scroll) ? note.scroll : 1;
+        const direction = noteScroll < 0 ? -1 : 1;
+        const speedScale = Math.max(0.05, Math.abs(noteScroll));
+        const x = LANE_TARGET_X + (note.timeMs - nowMs) * scrollPxPerMs * speedScale * direction;
         return {
           ...note,
           x
         };
       })
       .filter((note) => note.x > -60 && note.x < 1800);
-  }, [notes, nowMs, getLaneXAtTime]);
+  }, [notes, nowMs, scrollPxPerMs]);
 
   const visibleBarLines = useMemo(() => {
     return barLines
       .map((barLine) => ({
         ...barLine,
-        x: getLaneXAtTime(barLine.timeMs, nowMs)
+        x: LANE_TARGET_X + (barLine.timeMs - nowMs) * scrollPxPerMs
       }))
       .filter((barLine) => barLine.x > -80 && barLine.x < 1920);
-  }, [barLines, nowMs, getLaneXAtTime]);
+  }, [barLines, nowMs, scrollPxPerMs]);
 
   const visibleRolls = useMemo(() => {
     return rolls
       .map((roll) => {
-        const xStart = getLaneXAtTime(roll.startMs, nowMs);
-        const xEnd = getLaneXAtTime(roll.endMs, nowMs);
+        const startScroll = Number.isFinite(roll.scrollStart) ? roll.scrollStart : 1;
+        const endScroll = Number.isFinite(roll.scrollEnd) ? roll.scrollEnd : startScroll;
+        const startDirection = startScroll < 0 ? -1 : 1;
+        const endDirection = endScroll < 0 ? -1 : 1;
+        const startSpeedScale = Math.max(0.05, Math.abs(startScroll));
+        const endSpeedScale = Math.max(0.05, Math.abs(endScroll));
+        const xStart = LANE_TARGET_X + (roll.startMs - nowMs) * scrollPxPerMs * startSpeedScale * startDirection;
+        const xEnd = LANE_TARGET_X + (roll.endMs - nowMs) * scrollPxPerMs * endSpeedScale * endDirection;
         return {
           ...roll,
           xStart,
@@ -1613,15 +1535,18 @@ function PracticeModePage() {
         };
       })
       .filter((roll) => roll.xEnd > -120 && roll.xStart < 1920);
-  }, [rolls, nowMs, getLaneXAtTime]);
+  }, [rolls, nowMs, scrollPxPerMs]);
 
   const visibleBalloons = useMemo(() => {
     return balloons
       .map((balloon) => {
         const isHoldingAtJudge = nowMs >= balloon.timeMs && nowMs <= balloon.endMs && !balloon.popped;
+        const balloonScroll = Number.isFinite(balloon.scroll) ? balloon.scroll : 1;
+        const balloonDirection = balloonScroll < 0 ? -1 : 1;
+        const balloonSpeedScale = Math.max(0.05, Math.abs(balloonScroll));
         const approachX = nowMs > balloon.endMs
-          ? getLaneXAtTime(balloon.endMs, nowMs)
-          : getLaneXAtTime(balloon.timeMs, nowMs);
+          ? LANE_TARGET_X + (balloon.endMs - nowMs) * scrollPxPerMs * balloonSpeedScale * balloonDirection
+          : LANE_TARGET_X + (balloon.timeMs - nowMs) * scrollPxPerMs * balloonSpeedScale * balloonDirection;
         const pulseElapsed = Number.isFinite(balloon.pulseAtMs) ? nowMs - balloon.pulseAtMs : Infinity;
         const pulseScale = pulseElapsed >= 0 && pulseElapsed <= BALLOON_PULSE_MS
           ? 1 + Math.sin((pulseElapsed / BALLOON_PULSE_MS) * Math.PI) * 0.18
@@ -1634,7 +1559,7 @@ function PracticeModePage() {
         };
       })
       .filter((balloon) => !balloon.popped && balloon.x > -220 && balloon.x < 1920);
-  }, [balloons, nowMs, getLaneXAtTime]);
+  }, [balloons, nowMs, scrollPxPerMs]);
 
   const activeRollForDisplay = useMemo(() => {
     return rolls.find((roll) => nowMs >= roll.startMs && nowMs <= roll.endMs + ROLL_COUNT_HOLD_MS) || null;
