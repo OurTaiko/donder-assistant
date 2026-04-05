@@ -812,8 +812,23 @@ function PracticeModePage() {
     playStartRef.current = scheduledStart;
     setIsPlaying(true);
     setIsPaused(false);
+    setNowMs(-PRE_ROLL_MS);
     setRollBalloonHits(0);
     setStreakHits(0);
+    setRollHitCounts({});
+    setNotes((prev) => prev.map((note) => ({ ...note, judged: false, result: null, delta: null })));
+    setBalloons((prev) => prev.map((balloon) => ({
+      ...balloon,
+      remainingHits: balloon.requiredHits,
+      popped: false,
+      pulseAtMs: null
+    })));
+    hitFxRef.current = [];
+    judgeFxRef.current = [];
+    balloonFxRef.current = [];
+    hitNoteFxRef.current = [];
+    touchGuidePulseRef.current = [];
+    setHitFxTick((prev) => prev + 1);
     pausedAtMsRef.current = -PRE_ROLL_MS;
     pendingResetAfterSeekRef.current = false;
     missIgnoreBeforeMsRef.current = -Infinity;
@@ -1865,11 +1880,11 @@ function PracticeModePage() {
       ctx.stroke();
 
       const countText = String(Math.max(0, balloon.remainingHits));
-      const fontSize = Math.max(18, Math.floor(radius * 0.74));
+      const fontSize = Math.max(12, Math.floor(radius * 0.74));
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.font = `900 ${fontSize}px "Microsoft YaHei", "Noto Sans SC", sans-serif`;
-      ctx.lineWidth = Math.max(3, Math.floor(fontSize * 0.15));
+      ctx.lineWidth = Math.max(2, Math.floor(fontSize * 0.15));
       ctx.strokeStyle = '#2a3342';
       ctx.strokeText(countText, x, laneY);
       ctx.fillStyle = '#ffffff';
@@ -1907,32 +1922,6 @@ function PracticeModePage() {
     for (const judgeFx of judgeFxRef.current) {
       const elapsed = nowPerf - judgeFx.time;
       if (elapsed < 0 || elapsed > JUDGE_FEEDBACK_MS) continue;
-
-      if (judgeFx.isRollCombo) {
-        const p = Math.max(0, Math.min(1, elapsed / JUDGE_FEEDBACK_MS));
-        const alpha = Math.pow(1 - p, 0.92);
-        const comboX = judgeX;
-        const comboY = Math.floor(statusBarHeight * 0.5);
-        const baseFontSize = judgeFx.fontSize || 34;
-        const fontSize = Math.max(16, Math.round(baseFontSize * rowWidthScale));
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, width, statusBarHeight);
-        ctx.clip();
-        ctx.globalAlpha = alpha;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.lineJoin = 'round';
-        ctx.font = `900 ${fontSize}px "Microsoft YaHei", "Noto Sans SC", sans-serif`;
-        ctx.lineWidth = Math.max(3, Math.floor(fontSize * 0.14));
-        ctx.strokeStyle = judgeFx.stroke;
-        ctx.strokeText(judgeFx.text, comboX, comboY);
-        ctx.fillStyle = judgeFx.fill;
-        ctx.fillText(judgeFx.text, comboX, comboY);
-        ctx.restore();
-        continue;
-      }
 
       if (judgeFx.burstColor) {
         const flashProgress = Math.max(0, Math.min(1, elapsed / JUDGE_FLASH_MS));
