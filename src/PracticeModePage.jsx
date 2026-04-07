@@ -8,10 +8,13 @@ import {
   DialogSurface,
   DialogTitle,
   Input,
+  Popover,
+  PopoverSurface,
+  PopoverTrigger,
   Select,
   Switch
 } from '@fluentui/react-components';
-import { DismissRegular, PauseRegular, PlayRegular } from '@fluentui/react-icons';
+import { DismissRegular, InfoRegular, PauseRegular, PlayRegular } from '@fluentui/react-icons';
 import JSZip from 'jszip';
 import PracticeBreadcrumb from './practice-mode/PracticeBreadcrumb.jsx';
 import PracticeToolbar from './practice-mode/PracticeToolbar.jsx';
@@ -138,10 +141,96 @@ function computeHandSpeedBpmFromTapTimes(tapTimes) {
   return Math.round(60000 / (averageIntervalMs * 4));
 }
 
+function getTouchDistance(touchA, touchB) {
+  const dx = touchA.clientX - touchB.clientX;
+  const dy = touchA.clientY - touchB.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function getTouchCenter(touchA, touchB) {
+  return {
+    x: (touchA.clientX + touchB.clientX) / 2,
+    y: (touchA.clientY + touchB.clientY) / 2
+  };
+}
+
+function isCoarseInputDevice() {
+  return navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
+}
+
+function chunkArray(items, chunkSize) {
+  if (!Array.isArray(items) || !items.length) return [];
+  const safeChunkSize = Math.max(1, chunkSize);
+  const chunks = [];
+  for (let index = 0; index < items.length; index += safeChunkSize) {
+    chunks.push(items.slice(index, index + safeChunkSize));
+  }
+  return chunks;
+}
+
+function getResultDisplayPriority(result) {
+  if (result === 'miss') return 3;
+  if (result === 'bad') return 2;
+  if (result === 'good') return 1;
+  return 0;
+}
+
+function getResultVisualStyle(result) {
+  if (result === 'miss') {
+    return {
+      lineColor: 'rgba(181, 47, 47, 0.86)',
+      fillColor: '#ff6b6b',
+      strokeColor: '#7f1010',
+      labelFill: '#fff3f3',
+      labelStroke: 'rgba(90, 16, 16, 0.95)',
+      markerRadius: 5.4,
+      lineWidth: 2,
+      labelPrefix: ''
+    };
+  }
+  if (result === 'bad') {
+    return {
+      lineColor: 'rgba(196, 96, 16, 0.88)',
+      fillColor: '#ff8a3d',
+      strokeColor: '#8a3e00',
+      labelFill: '#fff3ea',
+      labelStroke: 'rgba(123, 56, 8, 0.94)',
+      markerRadius: 4.4,
+      lineWidth: 1.8,
+      labelPrefix: ''
+    };
+  }
+  if (result === 'good') {
+    return {
+      lineColor: 'rgba(191, 166, 22, 0.82)',
+      fillColor: '#ffe45c',
+      strokeColor: '#7a6800',
+      labelFill: '#fffef0',
+      labelStroke: 'rgba(95, 80, 10, 0.92)',
+      markerRadius: 4,
+      lineWidth: 1.4,
+      labelPrefix: ''
+    };
+  }
+  return {
+    lineColor: 'rgba(128, 181, 130, 0.38)',
+    fillColor: '#d9f3da',
+    strokeColor: '#78a67a',
+    labelFill: 'rgba(240, 252, 241, 0.82)',
+    labelStroke: 'rgba(88, 126, 90, 0.68)',
+    markerRadius: 3,
+    lineWidth: 1,
+    labelPrefix: ''
+  };
+}
+
 function PracticeModePage() {
   const fileInputRef = useRef(null);
   const canvasRef = useRef(null);
   const touchGuideCanvasRef = useRef(null);
+  const resultCanvasRefs = useRef([]);
+  const resultContentRef = useRef(null);
+  const resultViewportRef = useRef(null);
   const rafRef = useRef(0);
   const playStartRef = useRef(0);
   const scheduledStartRef = useRef(0);
@@ -177,6 +266,25 @@ function PracticeModePage() {
   const driftPersistentCorrectionMsRef = useRef(0);
   const handSpeedTapTimesRef = useRef([]);
   const handSpeedResetTimerRef = useRef(0);
+  const resultDragStateRef = useRef({ active: false, startX: 0, startY: 0, offsetX: 0, offsetY: 0 });
+  const resultTouchStateRef = useRef({
+    mode: 'none',
+    startDistance: 0,
+    startScale: 1,
+    startOffset: { x: 0, y: 0 },
+    startCenter: { x: 0, y: 0 },
+    startPoint: { x: 0, y: 0 }
+  });
+  const resultLastTapRef = useRef({ time: 0, x: 0, y: 0 });
+  const resultSuppressDblClickUntilRef = useRef(0);
+  const resultScaleRef = useRef(1);
+  const resultOffsetRef = useRef({ x: 0, y: 0 });
+  const resultTransformRafRef = useRef(0);
+  const pendingResultScaleRef = useRef(1);
+  const pendingResultOffsetRef = useRef({ x: 0, y: 0 });
+  const pendingResultCommitRef = useRef({ scale: false, offset: false });
+  const resultWheelInteractionTimerRef = useRef(null);
+  const resultDoubleTapToggleRafRef = useRef(0);
 
   const [, setStatusText] = useState('准备就绪：导入本地 TJA 后点击开始。按键：F/J=咚，D/K=咔。');
   const [songTitle, setSongTitle] = useState('');
@@ -263,6 +371,11 @@ function PracticeModePage() {
   });
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [isSpeedDialogOpen, setIsSpeedDialogOpen] = useState(false);
+  const [isResultDialogOpen, setIsResultDialogOpen] = useState(false);
+  const [resultScale, setResultScale] = useState(1);
+  const [resultRenderScale, setResultRenderScale] = useState(1);
+  const [resultOffset, setResultOffset] = useState({ x: 0, y: 0 });
+  const [isResultDirectManipulating, setIsResultDirectManipulating] = useState(false);
   const [compensationInputValue, setCompensationInputValue] = useState('0');
   const [touchDrumOffsetXInputValue, setTouchDrumOffsetXInputValue] = useState('0');
   const [touchDrumOffsetYInputValue, setTouchDrumOffsetYInputValue] = useState('0');
@@ -382,6 +495,31 @@ function PracticeModePage() {
     setStatusText('已重置，点击开始进行练习。');
   }, [clearHandSpeed, stopLoop, stopAudioPlayback]);
 
+  useEffect(() => {
+    resultScaleRef.current = resultScale;
+  }, [resultScale]);
+
+  useEffect(() => {
+    resultOffsetRef.current = resultOffset;
+  }, [resultOffset]);
+
+  useEffect(() => {
+    return () => {
+      if (resultTransformRafRef.current) {
+        window.cancelAnimationFrame(resultTransformRafRef.current);
+        resultTransformRafRef.current = 0;
+      }
+      if (resultDoubleTapToggleRafRef.current) {
+        window.cancelAnimationFrame(resultDoubleTapToggleRafRef.current);
+        resultDoubleTapToggleRafRef.current = 0;
+      }
+      if (resultWheelInteractionTimerRef.current) {
+        window.clearTimeout(resultWheelInteractionTimerRef.current);
+        resultWheelInteractionTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const pauseForDialogOpen = useCallback(() => {
     if (!isPlaying) return;
     const current = nowMs;
@@ -445,6 +583,15 @@ function PracticeModePage() {
     setIsSpeedDialogOpen(false);
   }, []);
 
+  const openResultDialog = useCallback(() => {
+    pauseForDialogOpen();
+    setIsResultDialogOpen(true);
+  }, [pauseForDialogOpen]);
+
+  const closeResultDialog = useCallback(() => {
+    setIsResultDialogOpen(false);
+  }, []);
+
   const handleSettingsDialogOpenChange = useCallback((_, data) => {
     const nextOpen = Boolean(data?.open);
     if (nextOpen) {
@@ -459,6 +606,14 @@ function PracticeModePage() {
       pauseForDialogOpen();
     }
     setIsSpeedDialogOpen(nextOpen);
+  }, [pauseForDialogOpen]);
+
+  const handleResultDialogOpenChange = useCallback((_, data) => {
+    const nextOpen = Boolean(data?.open);
+    if (nextOpen) {
+      pauseForDialogOpen();
+    }
+    setIsResultDialogOpen(nextOpen);
   }, [pauseForDialogOpen]);
 
   const saveSpeedSetting = useCallback(() => {
@@ -598,6 +753,668 @@ function PracticeModePage() {
 
   const summary = useMemo(() => summarizeResults(notes), [notes]);
   const ngCount = useMemo(() => summary.bad + summary.miss, [summary.bad, summary.miss]);
+  const judgedHitNotes = useMemo(() => {
+    return notes.filter((note) => (
+      note.judged &&
+      note.result &&
+      note.result !== 'miss' &&
+      Number.isFinite(note.delta)
+    ));
+  }, [notes]);
+
+  const judgedResultNotes = useMemo(() => {
+    return notes.filter((note) => (
+      note.judged &&
+      note.result &&
+      Number.isFinite(note.delta)
+    ));
+  }, [notes]);
+
+  const hitDeltaSummary = useMemo(() => {
+    const formatStat = (value) => {
+      if (!Number.isFinite(value)) return '-';
+      const rounded = Math.round(value * 10) / 10;
+      return `${rounded > 0 ? '+' : ''}${rounded}ms`;
+    };
+
+    const computeMedian = (values) => {
+      if (!values.length) return null;
+      const sorted = [...values].sort((left, right) => left - right);
+      const middleIndex = Math.floor(sorted.length / 2);
+      if (sorted.length % 2 === 1) {
+        return sorted[middleIndex];
+      }
+      return (sorted[middleIndex - 1] + sorted[middleIndex]) / 2;
+    };
+
+    const buildStatsText = (values, label) => {
+      if (!values.length) {
+        return `${label}平均偏差 -，${label}偏差中位数 -`;
+      }
+      const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+      const median = computeMedian(values);
+      return `${label}平均偏差 ${formatStat(mean)}，${label}偏差中位数 ${formatStat(median)}`;
+    };
+
+    const breakdownText = `良 ${summary.perfect}，可 ${summary.good}，不可 ${summary.bad}，miss ${summary.miss}`;
+
+    if (!judgedHitNotes.length) {
+      return {
+        statsLines: [
+          buildStatsText([], ''),
+          buildStatsText([], '偏早'),
+          buildStatsText([], '偏晚')
+        ],
+        breakdownText
+      };
+    }
+
+    const deltas = judgedHitNotes.map((note) => Number(note.delta));
+    const earlyDeltas = deltas.filter((delta) => delta < 0);
+    const lateDeltas = deltas.filter((delta) => delta > 0);
+
+    return {
+      statsLines: [
+        buildStatsText(deltas, ''),
+        buildStatsText(earlyDeltas, '偏早'),
+        buildStatsText(lateDeltas, '偏晚')
+      ],
+      breakdownText
+    };
+  }, [judgedHitNotes, summary.bad, summary.good, summary.miss, summary.perfect]);
+
+  const resultBarPages = useMemo(() => {
+    const barIndices = Array.from(new Set(
+      notes
+        .filter((note) => Number.isInteger(note?.barIndex) && Number.isInteger(note?.charIndex))
+        .map((note) => note.barIndex)
+    )).sort((a, b) => a - b);
+
+    if (!barIndices.length) return [[]];
+    return chunkArray(barIndices, 8);
+  }, [notes]);
+
+  const clampResultScale = useCallback((value) => Math.min(4, Math.max(1, value)), []);
+
+  const queueResultTransformCommit = useCallback(() => {
+    if (resultTransformRafRef.current) return;
+    resultTransformRafRef.current = window.requestAnimationFrame(() => {
+      resultTransformRafRef.current = 0;
+      const commitFlags = pendingResultCommitRef.current;
+      if (commitFlags.scale) {
+        setResultScale(pendingResultScaleRef.current);
+      }
+      if (commitFlags.offset) {
+        setResultOffset(pendingResultOffsetRef.current);
+      }
+      pendingResultCommitRef.current = { scale: false, offset: false };
+    });
+  }, []);
+
+  const commitResultOffset = useCallback((nextOffset) => {
+    resultOffsetRef.current = nextOffset;
+    pendingResultOffsetRef.current = nextOffset;
+    pendingResultCommitRef.current.offset = true;
+    queueResultTransformCommit();
+  }, [queueResultTransformCommit]);
+
+  const commitResultScaleAndOffset = useCallback((nextScale, nextOffset) => {
+    resultScaleRef.current = nextScale;
+    resultOffsetRef.current = nextOffset;
+    pendingResultScaleRef.current = nextScale;
+    pendingResultOffsetRef.current = nextOffset;
+    pendingResultCommitRef.current.scale = true;
+    pendingResultCommitRef.current.offset = true;
+    queueResultTransformCommit();
+  }, [queueResultTransformCommit]);
+
+  const getResultNativeCanvasScale = useCallback(() => {
+    const canvas = resultCanvasRefs.current[0];
+    if (!canvas) return 1;
+    const cssWidth = canvas.offsetWidth;
+    const pixelWidth = canvas.width;
+    if (!cssWidth || !pixelWidth) return 1;
+    return clampResultScale(pixelWidth / cssWidth);
+  }, [clampResultScale]);
+
+  const getCenteredResultOffsetForScale = useCallback((scale) => {
+    const viewport = resultViewportRef.current;
+    const content = resultContentRef.current;
+    if (!viewport || !content) return { x: 0, y: 0 };
+
+    const viewportWidth = viewport.clientWidth;
+    const viewportHeight = viewport.clientHeight;
+    const scaledWidth = content.offsetWidth * scale;
+    const scaledHeight = content.offsetHeight * scale;
+
+    return {
+      x: (viewportWidth - scaledWidth) / 2,
+      y: (viewportHeight - scaledHeight) / 2
+    };
+  }, []);
+
+  const clampResultOffset = useCallback((nextOffset, scale = resultScaleRef.current) => {
+    const viewport = resultViewportRef.current;
+    const content = resultContentRef.current;
+    if (!viewport || !content) return nextOffset;
+
+    const viewportWidth = viewport.clientWidth;
+    const viewportHeight = viewport.clientHeight;
+    const contentWidth = content.offsetWidth;
+    const contentHeight = content.offsetHeight;
+    if (!viewportWidth || !viewportHeight || !contentWidth || !contentHeight) {
+      return nextOffset;
+    }
+
+    const scaledWidth = contentWidth * scale;
+    const scaledHeight = contentHeight * scale;
+
+    let minX;
+    let maxX;
+    if (scaledWidth <= viewportWidth) {
+      const centeredX = (viewportWidth - scaledWidth) / 2;
+      minX = centeredX;
+      maxX = centeredX;
+    } else {
+      minX = viewportWidth - scaledWidth;
+      maxX = 0;
+    }
+
+    let minY;
+    let maxY;
+    if (scaledHeight <= viewportHeight) {
+      const centeredY = (viewportHeight - scaledHeight) / 2;
+      minY = centeredY;
+      maxY = centeredY;
+    } else {
+      minY = viewportHeight - scaledHeight;
+      maxY = 0;
+    }
+
+    return {
+      x: Math.min(maxX, Math.max(minX, nextOffset.x)),
+      y: Math.min(maxY, Math.max(minY, nextOffset.y))
+    };
+  }, []);
+
+  const toggleResultOriginalAndFitScale = useCallback((centerPoint) => {
+    const nativeScale = getResultNativeCanvasScale();
+    const currentScale = resultScaleRef.current;
+    const targetScale = currentScale > 1.02 ? 1 : nativeScale;
+
+    let nextOffset;
+    if (centerPoint && Number.isFinite(centerPoint.x) && Number.isFinite(centerPoint.y)) {
+      const prevOffset = resultOffsetRef.current;
+      const contentX = (centerPoint.x - prevOffset.x) / currentScale;
+      const contentY = (centerPoint.y - prevOffset.y) / currentScale;
+      nextOffset = {
+        x: centerPoint.x - contentX * targetScale,
+        y: centerPoint.y - contentY * targetScale
+      };
+    } else {
+      nextOffset = getCenteredResultOffsetForScale(targetScale);
+    }
+
+    commitResultScaleAndOffset(targetScale, clampResultOffset(nextOffset, targetScale));
+  }, [clampResultOffset, commitResultScaleAndOffset, getCenteredResultOffsetForScale, getResultNativeCanvasScale]);
+
+  const handleResultWheel = useCallback((event) => {
+    event.preventDefault();
+    setIsResultDirectManipulating(true);
+    if (resultWheelInteractionTimerRef.current) {
+      window.clearTimeout(resultWheelInteractionTimerRef.current);
+    }
+
+    const viewport = resultViewportRef.current;
+    if (!viewport) return;
+
+    const rect = viewport.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
+    const prevScale = resultScaleRef.current;
+
+    let delta = event.deltaY;
+    if (event.deltaMode === 1) {
+      delta *= 16;
+    } else if (event.deltaMode === 2) {
+      delta *= viewport.clientHeight || 800;
+    }
+
+    const scaleFactor = Math.exp(-delta * 0.0018);
+    const nextScale = clampResultScale(prevScale * scaleFactor);
+    if (nextScale === prevScale) return;
+
+    const prevOffset = resultOffsetRef.current;
+    const contentX = (pointerX - prevOffset.x) / prevScale;
+    const contentY = (pointerY - prevOffset.y) / prevScale;
+    const nextOffset = {
+      x: pointerX - contentX * nextScale,
+      y: pointerY - contentY * nextScale
+    };
+
+    commitResultScaleAndOffset(nextScale, clampResultOffset(nextOffset, nextScale));
+
+    resultWheelInteractionTimerRef.current = window.setTimeout(() => {
+      setIsResultDirectManipulating(false);
+      resultWheelInteractionTimerRef.current = null;
+    }, 90);
+  }, [clampResultOffset, clampResultScale, commitResultScaleAndOffset]);
+
+  const handleResultMouseDown = useCallback((event) => {
+    event.preventDefault();
+    setIsResultDirectManipulating(true);
+    resultDragStateRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: resultOffsetRef.current.x,
+      offsetY: resultOffsetRef.current.y
+    };
+  }, []);
+
+  const handleResultMouseMove = useCallback((event) => {
+    if (!resultDragStateRef.current.active) return;
+    const dx = event.clientX - resultDragStateRef.current.startX;
+    const dy = event.clientY - resultDragStateRef.current.startY;
+    commitResultOffset(clampResultOffset({
+      x: resultDragStateRef.current.offsetX + dx,
+      y: resultDragStateRef.current.offsetY + dy
+    }));
+  }, [clampResultOffset, commitResultOffset]);
+
+  const handleResultMouseUp = useCallback(() => {
+    resultDragStateRef.current.active = false;
+    setIsResultDirectManipulating(false);
+  }, []);
+
+  const handleResultTouchStart = useCallback((event) => {
+    setIsResultDirectManipulating(true);
+    if (event.touches.length === 2) {
+      const [touchA, touchB] = event.touches;
+      resultTouchStateRef.current = {
+        mode: 'pinch',
+        startDistance: getTouchDistance(touchA, touchB),
+        startScale: resultScaleRef.current,
+        startOffset: resultOffsetRef.current,
+        startCenter: getTouchCenter(touchA, touchB),
+        startPoint: { x: 0, y: 0 }
+      };
+      return;
+    }
+
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      resultTouchStateRef.current = {
+        mode: 'pan',
+        startDistance: 0,
+        startScale: resultScaleRef.current,
+        startOffset: resultOffsetRef.current,
+        startCenter: { x: 0, y: 0 },
+        startPoint: { x: touch.clientX, y: touch.clientY }
+      };
+    }
+  }, []);
+
+  const handleResultTouchMove = useCallback((event) => {
+    if (!resultTouchStateRef.current.mode || resultTouchStateRef.current.mode === 'none') return;
+
+    if (resultTouchStateRef.current.mode === 'pan' && event.touches.length === 1) {
+      const touch = event.touches[0];
+      const dx = touch.clientX - resultTouchStateRef.current.startPoint.x;
+      const dy = touch.clientY - resultTouchStateRef.current.startPoint.y;
+      commitResultOffset(clampResultOffset({
+        x: resultTouchStateRef.current.startOffset.x + dx,
+        y: resultTouchStateRef.current.startOffset.y + dy
+      }));
+      return;
+    }
+
+    if (resultTouchStateRef.current.mode === 'pinch' && event.touches.length === 2) {
+      const [touchA, touchB] = event.touches;
+      const nextDistance = getTouchDistance(touchA, touchB);
+      const center = getTouchCenter(touchA, touchB);
+      const nextScale = clampResultScale(
+        (nextDistance / resultTouchStateRef.current.startDistance) * resultTouchStateRef.current.startScale
+      );
+      const contentX = (
+        resultTouchStateRef.current.startCenter.x - resultTouchStateRef.current.startOffset.x
+      ) / resultTouchStateRef.current.startScale;
+      const contentY = (
+        resultTouchStateRef.current.startCenter.y - resultTouchStateRef.current.startOffset.y
+      ) / resultTouchStateRef.current.startScale;
+
+      commitResultScaleAndOffset(nextScale, clampResultOffset({
+        x: center.x - contentX * nextScale,
+        y: center.y - contentY * nextScale
+      }, nextScale));
+    }
+  }, [clampResultOffset, clampResultScale, commitResultOffset, commitResultScaleAndOffset]);
+
+  const handleResultTouchEnd = useCallback((event) => {
+    const prevMode = resultTouchStateRef.current.mode;
+
+    if (event.touches.length === 0) {
+      resultTouchStateRef.current.mode = 'none';
+      setIsResultDirectManipulating(false);
+
+      if (prevMode === 'pan' && event.changedTouches.length === 1) {
+        const touch = event.changedTouches[0];
+        const now = Date.now();
+        const dt = now - resultLastTapRef.current.time;
+        const dx = touch.clientX - resultLastTapRef.current.x;
+        const dy = touch.clientY - resultLastTapRef.current.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (dt > 0 && dt < 300 && distance < 28) {
+          const viewport = resultViewportRef.current;
+          const rect = viewport?.getBoundingClientRect();
+          const point = rect
+            ? { x: touch.clientX - rect.left, y: touch.clientY - rect.top }
+            : undefined;
+          if (resultDoubleTapToggleRafRef.current) {
+            window.cancelAnimationFrame(resultDoubleTapToggleRafRef.current);
+          }
+          resultDoubleTapToggleRafRef.current = window.requestAnimationFrame(() => {
+            resultDoubleTapToggleRafRef.current = 0;
+            toggleResultOriginalAndFitScale(point);
+          });
+          resultSuppressDblClickUntilRef.current = Date.now() + 450;
+          resultLastTapRef.current = { time: 0, x: 0, y: 0 };
+          return;
+        }
+
+        resultLastTapRef.current = { time: now, x: touch.clientX, y: touch.clientY };
+      }
+      return;
+    }
+
+    if (event.touches.length === 1) {
+      setIsResultDirectManipulating(true);
+      const touch = event.touches[0];
+      resultTouchStateRef.current = {
+        mode: 'pan',
+        startDistance: 0,
+        startScale: resultScaleRef.current,
+        startOffset: resultOffsetRef.current,
+        startCenter: { x: 0, y: 0 },
+        startPoint: { x: touch.clientX, y: touch.clientY }
+      };
+    }
+  }, [toggleResultOriginalAndFitScale]);
+
+  const drawResultCanvas = useCallback(() => {
+    if (!isResultDialogOpen) return;
+
+    const rootChart = baseChartForBranch;
+    if (!rootChart) return;
+
+    const branchChart = rootChart.branches?.[branchSelection] || rootChart;
+    const bars = Array.isArray(branchChart?.bars) ? branchChart.bars : [];
+    const coarseInput = typeof window !== 'undefined' ? isCoarseInputDevice() : false;
+    const baseDpr = window.devicePixelRatio || 1;
+    const qualityScale = coarseInput
+      ? Math.max(2.2, Math.min(4, resultRenderScale))
+      : Math.max(1.25, Math.min(2.5, resultRenderScale));
+    const dpr = Math.min(6, Math.max(1, baseDpr * qualityScale));
+
+    const viewportWidth = resultViewportRef.current?.clientWidth || resultCanvasRefs.current[0]?.clientWidth || 920;
+    const width = Math.max(720, Math.round(viewportWidth));
+    const columns = 1;
+    const cardHeight = 188;
+    const gap = 18;
+
+    const cardWidth = (width - gap * (columns - 1)) / columns;
+    const headerHeight = 28;
+    const laneY = 92;
+    const earlyLabelTop = 40;
+    const lateLabelTop = 112;
+    const labelLaneHeight = 16;
+    const labelXCellWidth = 26;
+    const markerRadius = 7;
+    const deltaVisualMax = Math.max(60, BAD_WINDOW);
+
+    for (let pageIndex = 0; pageIndex < resultBarPages.length; pageIndex += 1) {
+      const pageBars = resultBarPages[pageIndex] || [];
+      const canvas = resultCanvasRefs.current[pageIndex];
+      if (!canvas) continue;
+
+      const rows = Math.max(1, Math.ceil(Math.max(1, pageBars.length) / columns));
+      const height = rows * cardHeight + Math.max(0, rows - 1) * gap;
+      const renderWidth = Math.floor(width * dpr);
+      const renderHeight = Math.floor(height * dpr);
+      if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
+        canvas.width = renderWidth;
+        canvas.height = renderHeight;
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) continue;
+
+      ctx.save();
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, width, height);
+
+      const background = ctx.createLinearGradient(0, 0, 0, height);
+      background.addColorStop(0, '#fff6eb');
+      background.addColorStop(1, '#ffe8cf');
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, width, height);
+
+      if (!pageBars.length) {
+        ctx.fillStyle = '#7a5a3a';
+        ctx.font = '700 18px "Microsoft YaHei", "Noto Sans SC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('暂无可展示的小节', width / 2, height / 2);
+        ctx.restore();
+        continue;
+      }
+
+      for (let index = 0; index < pageBars.length; index += 1) {
+        const barIndex = pageBars[index];
+      const bar = bars[barIndex] || [];
+      const barNotes = notes.filter((note) => note.barIndex === barIndex);
+        const judgedBarNotes = judgedResultNotes
+          .filter((note) => note.barIndex === barIndex)
+          .sort((left, right) => getResultDisplayPriority(left.result) - getResultDisplayPriority(right.result));
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const cardX = column * (cardWidth + gap);
+      const cardY = row * (cardHeight + gap);
+      const innerLeft = cardX + 14;
+      const innerRight = cardX + cardWidth - 14;
+      const railWidth = Math.max(40, innerRight - innerLeft);
+      const charCount = Math.max(1, bar.length);
+
+      ctx.fillStyle = '#fffdf8';
+      ctx.strokeStyle = 'rgba(186, 122, 64, 0.28)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(cardX + 0.5, cardY + 0.5, cardWidth - 1, cardHeight - 1, 14);
+      ctx.fill();
+      ctx.stroke();
+
+      const headerGradient = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY);
+      headerGradient.addColorStop(0, '#ffd7a8');
+      headerGradient.addColorStop(1, '#ffbd7a');
+      ctx.fillStyle = headerGradient;
+      ctx.beginPath();
+      ctx.roundRect(cardX + 1, cardY + 1, cardWidth - 2, headerHeight, 14);
+      ctx.fill();
+      ctx.fillRect(cardX + 1, cardY + 14, cardWidth - 2, headerHeight - 13);
+
+      ctx.fillStyle = '#7a4314';
+      ctx.font = '700 13px "Microsoft YaHei", "Noto Sans SC", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`第 ${barIndex + 1} 小节`, cardX + 14, cardY + 15);
+
+      ctx.fillStyle = '#9f6a3d';
+      ctx.font = '600 11px "Microsoft YaHei", "Noto Sans SC", sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${barNotes.length} 音符`, cardX + cardWidth - 14, cardY + 15);
+
+      ctx.strokeStyle = '#d7b08c';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(innerLeft, cardY + laneY);
+      ctx.lineTo(innerRight, cardY + laneY);
+      ctx.stroke();
+
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = 'rgba(172, 120, 70, 0.22)';
+      for (let beat = 1; beat < 4; beat += 1) {
+        const beatX = innerLeft + (railWidth * beat) / 4;
+        ctx.beginPath();
+        ctx.moveTo(beatX, cardY + 34);
+        ctx.lineTo(beatX, cardY + cardHeight - 18);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      const notePoints = new Map();
+      for (const note of barNotes) {
+        const position = innerLeft + railWidth * ((note.charIndex + 0.5) / charCount);
+        notePoints.set(note.id, position);
+        ctx.fillStyle = note.type === 'ka' ? '#4aa3ff' : '#ff7e53';
+        ctx.strokeStyle = note.type === 'ka' ? '#0f4f87' : '#8d3515';
+        ctx.lineWidth = note.isBig ? 2.4 : 1.6;
+        ctx.beginPath();
+        ctx.arc(position, cardY + laneY, note.isBig ? markerRadius + 2 : markerRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      const earlyUsage = new Set();
+      const lateUsage = new Set();
+      for (const note of judgedBarNotes) {
+        const pointX = notePoints.get(note.id);
+        if (!Number.isFinite(pointX)) continue;
+
+        const deltaMs = Number(note.delta);
+        const isLate = deltaMs > 0 || note.result === 'miss';
+        const visualStyle = getResultVisualStyle(note.result);
+        const label = `${deltaMs > 0 ? '+' : ''}${Math.round(deltaMs)}ms`;
+        const xCell = Math.round((pointX - innerLeft) / labelXCellWidth);
+        const pointY = cardY + laneY;
+        if (note.result === 'miss') {
+          const missSize = visualStyle.markerRadius;
+          ctx.strokeStyle = visualStyle.strokeColor;
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(pointX - missSize, pointY - missSize);
+          ctx.lineTo(pointX + missSize, pointY + missSize);
+          ctx.moveTo(pointX + missSize, pointY - missSize);
+          ctx.lineTo(pointX - missSize, pointY + missSize);
+          ctx.stroke();
+          continue;
+        }
+
+        const normalizedDelta = Math.min(1, Math.abs(deltaMs) / deltaVisualMax);
+        const markerMinY = cardY + earlyLabelTop + 6;
+        const markerMaxY = cardY + cardHeight - 22;
+        const markerY = isLate
+          ? pointY + 18 + normalizedDelta * Math.max(0, markerMaxY - (pointY + 18))
+          : pointY - 18 - normalizedDelta * Math.max(0, (pointY - 18) - markerMinY);
+        const targetLabelY = markerY + (isLate ? 12 : -12);
+        const minCellY = Math.ceil((cardY + earlyLabelTop) / labelLaneHeight);
+        const maxCellY = Math.floor((cardY + cardHeight - 18) / labelLaneHeight);
+        const desiredCellY = Math.round(targetLabelY / labelLaneHeight);
+        const cellStep = isLate ? 1 : -1;
+        const usage = isLate ? lateUsage : earlyUsage;
+        let labelCellY = Math.max(minCellY, Math.min(maxCellY, desiredCellY));
+        let attempts = 0;
+        while (attempts < 12 && usage.has(`${xCell}-${labelCellY}`)) {
+          const nextCellY = labelCellY + cellStep;
+          if (nextCellY < minCellY || nextCellY > maxCellY) {
+            break;
+          }
+          labelCellY = nextCellY;
+          attempts += 1;
+        }
+        usage.add(`${xCell}-${labelCellY}`);
+
+        const labelY = labelCellY * labelLaneHeight;
+
+        ctx.strokeStyle = visualStyle.lineColor;
+        ctx.lineWidth = visualStyle.lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(pointX, pointY);
+        ctx.lineTo(pointX, markerY);
+        ctx.stroke();
+
+        ctx.fillStyle = visualStyle.fillColor;
+        ctx.strokeStyle = visualStyle.strokeColor;
+        ctx.lineWidth = visualStyle.lineWidth;
+        ctx.beginPath();
+        ctx.arc(pointX, markerY, visualStyle.markerRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = note.result === 'perfect'
+          ? '600 9px "Microsoft YaHei", "Noto Sans SC", sans-serif'
+          : '700 10px "Microsoft YaHei", "Noto Sans SC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = visualStyle.labelStroke;
+        ctx.strokeText(label, pointX, labelY);
+        ctx.fillStyle = visualStyle.labelFill;
+        ctx.fillText(label, pointX, labelY);
+      }
+      }
+
+      ctx.restore();
+    }
+  }, [isResultDialogOpen, baseChartForBranch, branchSelection, judgedResultNotes, notes, resultBarPages, resultRenderScale]);
+
+  useEffect(() => {
+    if (!isResultDialogOpen) return;
+    setResultScale(1);
+    setResultRenderScale(1);
+    setResultOffset({ x: 0, y: 0 });
+    pendingResultScaleRef.current = 1;
+    pendingResultOffsetRef.current = { x: 0, y: 0 };
+    resultScaleRef.current = 1;
+    resultOffsetRef.current = { x: 0, y: 0 };
+  }, [isResultDialogOpen]);
+
+  useEffect(() => {
+    if (!isResultDialogOpen) return;
+    const timer = window.setTimeout(() => {
+      setResultRenderScale(resultScaleRef.current);
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isResultDialogOpen, resultScale]);
+
+  useEffect(() => {
+    if (!isResultDialogOpen) return;
+    const viewport = resultViewportRef.current;
+    if (!viewport) return;
+
+    const onWheel = (event) => {
+      handleResultWheel(event);
+    };
+
+    viewport.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      viewport.removeEventListener('wheel', onWheel);
+    };
+  }, [handleResultWheel, isResultDialogOpen]);
+
+  useEffect(() => {
+    if (!isResultDialogOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      commitResultOffset(clampResultOffset(resultOffsetRef.current, resultScaleRef.current));
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [clampResultOffset, commitResultOffset, drawResultCanvas, isResultDialogOpen, resultScale]);
 
   const effectiveScrollPxPerMs = useMemo(() => {
     return scrollPxPerMs * scrollSpeedMultiplier;
@@ -3080,15 +3897,24 @@ function PracticeModePage() {
   }, [drawLaneCanvas]);
 
   useEffect(() => {
+    if (!isResultDialogOpen) return;
+    drawResultCanvas();
+  }, [isResultDialogOpen, drawResultCanvas]);
+
+  useEffect(() => {
     const onResize = () => {
       drawLaneCanvas();
+      if (isResultDialogOpen) {
+        drawResultCanvas();
+        commitResultOffset(clampResultOffset(resultOffsetRef.current, resultScaleRef.current));
+      }
       setIsMobileToolbar(window.innerWidth <= MOBILE_TOOLBAR_BREAKPOINT);
     };
     window.addEventListener('resize', onResize);
     return () => {
       window.removeEventListener('resize', onResize);
     };
-  }, [drawLaneCanvas]);
+  }, [clampResultOffset, commitResultOffset, drawLaneCanvas, drawResultCanvas, isResultDialogOpen]);
 
   const mainPlaybackLabel = isPlaying ? '暂停' : (isPaused ? '继续' : '开始');
   const mainPlaybackIcon = isPlaying ? <PauseRegular /> : <PlayRegular />;
@@ -3111,9 +3937,106 @@ function PracticeModePage() {
           onReset={resetPlayback}
           notesLength={notes.length}
           isPaused={isPaused}
+          onOpenResultDialog={openResultDialog}
           onOpenSpeedDialog={openSpeedDialog}
           onOpenSettings={openSettingsDialog}
         />
+
+        <Dialog open={isResultDialogOpen} onOpenChange={handleResultDialogOpenChange}>
+          <DialogSurface className="practice-result-dialog-surface">
+            <DialogBody className="practice-settings-dialog-body">
+              <Button
+                className="practice-settings-close-button"
+                appearance="subtle"
+                size="small"
+                shape="circular"
+                icon={<DismissRegular />}
+                aria-label="关闭结算"
+                title="关闭结算"
+                onClick={closeResultDialog}
+              />
+              <DialogTitle>
+                <div className="practice-result-title-row">
+                  <span>结算总览</span>
+                  <Popover positioning="below-end">
+                    <PopoverTrigger disableButtonEnhancement>
+                      <Button
+                        className="practice-result-help-button"
+                        appearance="subtle"
+                        size="small"
+                        shape="circular"
+                        icon={<InfoRegular />}
+                        aria-label="查看结算说明"
+                        title="查看结算说明"
+                      />
+                    </PopoverTrigger>
+                    <PopoverSurface>
+                      <div className="practice-result-help-content">
+                        <p className="practice-result-help-line">仅展示包含可判定音符的小节。每张卡片按小节内位置排布音符，并逐个标注命中偏差。</p>
+                        <p className="practice-result-help-line">图中弱化良，突出可，并重点强调不可与 miss；平均偏差统计包含良 / 可 / 不可，排除 miss。</p>
+                        <p className="practice-result-help-line">交互：滚轮缩放，拖拽平移，双击切换放大；触屏支持单指拖动和双指缩放。</p>
+                      </div>
+                    </PopoverSurface>
+                  </Popover>
+                </div>
+              </DialogTitle>
+              <DialogContent>
+                <div className="practice-result-summary">
+                  {hitDeltaSummary.statsLines.map((line) => (
+                    <p className="practice-result-summary-line" key={line}>{line}</p>
+                  ))}
+                  <p className="practice-result-summary-line">{hitDeltaSummary.breakdownText}</p>
+                </div>
+                <div
+                  ref={resultViewportRef}
+                  className="practice-result-viewport"
+                  onMouseDown={handleResultMouseDown}
+                  onDoubleClick={(event) => {
+                    if (Date.now() < resultSuppressDblClickUntilRef.current) return;
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    toggleResultOriginalAndFitScale({
+                      x: event.clientX - rect.left,
+                      y: event.clientY - rect.top
+                    });
+                  }}
+                  onMouseMove={handleResultMouseMove}
+                  onMouseUp={handleResultMouseUp}
+                  onMouseLeave={handleResultMouseUp}
+                  onTouchStart={handleResultTouchStart}
+                  onTouchMove={handleResultTouchMove}
+                  onTouchEnd={handleResultTouchEnd}
+                >
+                  <div
+                    className="practice-result-stage"
+                    style={{ transform: `translate(${resultOffset.x}px, ${resultOffset.y}px)` }}
+                  >
+                    <div
+                      ref={resultContentRef}
+                      className={`practice-result-zoom-layer ${isResultDirectManipulating ? 'is-direct-manipulating' : ''}`}
+                      style={{ transform: `scale(${resultScale})` }}
+                    >
+                      <div className="practice-result-canvas-stack">
+                        {resultBarPages.map((_, pageIndex) => (
+                          <canvas
+                            key={`result-page-${pageIndex}`}
+                            ref={(node) => {
+                              resultCanvasRefs.current[pageIndex] = node;
+                            }}
+                            className="practice-result-canvas"
+                            aria-label={`结算谱面偏差图第 ${pageIndex + 1} 页`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+              <DialogActions>
+                <Button appearance="primary" onClick={closeResultDialog}>关闭</Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
 
         <Dialog open={isSettingsDialogOpen} onOpenChange={handleSettingsDialogOpenChange}>
           <DialogSurface>

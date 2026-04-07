@@ -130,6 +130,8 @@ export function buildTimeline(playableChart, initialTimeMs = 0) {
       noteOrdinal += 1;
       notes.push({
         id: `${barIndex}-${charIndex}-${noteOrdinal}`,
+        barIndex,
+        charIndex,
         type: laneType,
         isBig: isBigNoteType(note),
         scroll: eventScroll,

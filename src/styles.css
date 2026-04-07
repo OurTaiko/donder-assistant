@@ -2097,6 +2097,94 @@ body {
   padding-top: 8px;
 }
 
+.practice-result-dialog-surface {
+  width: min(1080px, 94vw);
+}
+
+.practice-result-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.practice-result-help-button {
+  min-width: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.practice-result-help-content {
+  display: grid;
+  gap: 8px;
+  max-width: min(320px, 72vw);
+}
+
+.practice-result-help-line {
+  margin: 0;
+  color: #4f6c82;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.practice-result-summary {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.practice-result-summary-line {
+  margin: 0;
+  color: #4f6c82;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.practice-result-viewport {
+  min-height: 420px;
+  max-height: min(72vh, 820px);
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(196, 146, 96, 0.48);
+  background: #fff3e4;
+  box-shadow: inset 0 0 0 1px rgba(255, 249, 240, 0.55);
+  cursor: grab;
+  touch-action: none;
+  overscroll-behavior: contain;
+  user-select: none;
+}
+
+.practice-result-viewport:active {
+  cursor: grabbing;
+}
+
+.practice-result-stage {
+  width: fit-content;
+  height: fit-content;
+}
+
+.practice-result-zoom-layer {
+  transform-origin: top left;
+  transition: transform 180ms cubic-bezier(0.2, 0.75, 0.2, 1);
+  will-change: transform;
+}
+
+.practice-result-zoom-layer.is-direct-manipulating {
+  transition: none;
+}
+
+.practice-result-canvas-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.practice-result-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #fff3e4;
+}
+
 .practice-settings-close-button {
   position: absolute;
   top: 6px;
@@ -2690,6 +2778,10 @@ body {
 
   .practice-info-bar {
     gap: 8px;
+  }
+
+  .practice-result-canvas {
+    height: auto;
   }
 
   .practice-frame-wrap {

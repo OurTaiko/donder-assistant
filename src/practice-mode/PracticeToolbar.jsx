@@ -5,6 +5,7 @@ import {
   ToolbarDivider
 } from '@fluentui/react-components';
 import {
+  DataHistogramRegular,
   FastForwardRegular,
   FolderOpenRegular,
   PlaySettingsRegular,
@@ -24,6 +25,7 @@ function PracticeToolbar({
   onReset,
   notesLength,
   isPaused,
+  onOpenResultDialog,
   onOpenSpeedDialog,
   onOpenSettings
 }) {
@@ -76,6 +78,13 @@ function PracticeToolbar({
       </div>
       <ToolbarDivider />
       <div className="practice-toolbar-group" role="group" aria-label="系统设置">
+        <ToolbarButton
+          onClick={onOpenResultDialog}
+          disabled={!notesLength}
+          icon={<DataHistogramRegular />}
+          aria-label="结算"
+          title="结算"
+        />
         <ToolbarButton
           onClick={onOpenSettings}
           icon={<SettingsRegular />}
