@@ -2214,6 +2214,25 @@ body {
   color: #5f7387;
 }
 
+.practice-setting-row {
+  display: flex;
+  gap: 12px;
+}
+
+.practice-setting-col {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.practice-setting-col-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5f7387;
+}
+
 .practice-frame-wrap {
   position: relative;
   flex: 1 1 auto;
@@ -2822,4 +2841,41 @@ body {
   .target-score-result-emphasis {
     font-size: 25px;
   }
+}
+
+/* ── Fullscreen practice mode ── */
+
+:fullscreen .top-bar {
+  display: none;
+}
+
+:fullscreen .app-footer {
+  display: none;
+}
+
+:fullscreen .content-area {
+  top: 0;
+  bottom: 0;
+}
+
+.practice-fullscreen {
+  background: #000;
+}
+
+.practice-fullscreen .practice-wrapper {
+  height: 100%;
+}
+
+.practice-fullscreen .practice-frame-wrap {
+  min-height: 0;
+  height: 100%;
+}
+
+.practice-fullscreen .practice-lane-canvas {
+  height: auto;
+  max-height: 50vh;
+}
+
+.practice-fullscreen .practice-touch-zone {
+  min-height: 0;
 }

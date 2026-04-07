@@ -69,6 +69,9 @@ const PRACTICE_AUDIO_COMPENSATION_STORAGE_KEY = 'taiko-rating.practice.audio-com
 const PRACTICE_TOUCH_DRUM_OFFSET_X_STORAGE_KEY = 'taiko-rating.practice.touch-drum-offset-x.v1';
 const PRACTICE_TOUCH_DRUM_OFFSET_Y_STORAGE_KEY = 'taiko-rating.practice.touch-drum-offset-y.v1';
 const PRACTICE_TOUCH_DRUM_SCALE_STORAGE_KEY = 'taiko-rating.practice.touch-drum-scale-percent.v1';
+const PRACTICE_TOUCH_DRUM_LANDSCAPE_OFFSET_X_STORAGE_KEY = 'taiko-rating.practice.touch-drum-landscape-offset-x.v1';
+const PRACTICE_TOUCH_DRUM_LANDSCAPE_OFFSET_Y_STORAGE_KEY = 'taiko-rating.practice.touch-drum-landscape-offset-y.v1';
+const PRACTICE_TOUCH_DRUM_LANDSCAPE_SCALE_STORAGE_KEY = 'taiko-rating.practice.touch-drum-landscape-scale-percent.v1';
 const PRACTICE_TOUCH_BOTTOM_DEADZONE_STORAGE_KEY = 'taiko-rating.practice.touch-bottom-deadzone-px.v1';
 const PRACTICE_TOUCH_BOTTOM_DEADZONE_MASK_HIDDEN_STORAGE_KEY = 'taiko-rating.practice.touch-bottom-deadzone-mask-hidden.v1';
 const PRACTICE_DRIFT_MONITOR_VISIBLE_STORAGE_KEY = 'taiko-rating.practice.drift-monitor-visible.v1';
@@ -353,6 +356,24 @@ function PracticeModePage() {
     const parsed = Number.parseFloat(String(raw ?? '100'));
     return Number.isFinite(parsed) ? parsed : 100;
   });
+  const [touchDrumLandscapeOffsetX, setTouchDrumLandscapeOffsetX] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    const raw = window.localStorage.getItem(PRACTICE_TOUCH_DRUM_LANDSCAPE_OFFSET_X_STORAGE_KEY);
+    const parsed = Number.parseFloat(String(raw ?? '0'));
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  const [touchDrumLandscapeOffsetY, setTouchDrumLandscapeOffsetY] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    const raw = window.localStorage.getItem(PRACTICE_TOUCH_DRUM_LANDSCAPE_OFFSET_Y_STORAGE_KEY);
+    const parsed = Number.parseFloat(String(raw ?? '0'));
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  const [touchDrumLandscapeScalePercent, setTouchDrumLandscapeScalePercent] = useState(() => {
+    if (typeof window === 'undefined') return 100;
+    const raw = window.localStorage.getItem(PRACTICE_TOUCH_DRUM_LANDSCAPE_SCALE_STORAGE_KEY);
+    const parsed = Number.parseFloat(String(raw ?? '100'));
+    return Number.isFinite(parsed) ? parsed : 100;
+  });
   const [touchBottomDeadzonePx, setTouchBottomDeadzonePx] = useState(() => {
     if (typeof window === 'undefined') return 100;
     const raw = window.localStorage.getItem(PRACTICE_TOUCH_BOTTOM_DEADZONE_STORAGE_KEY);
@@ -380,6 +401,9 @@ function PracticeModePage() {
   const [touchDrumOffsetXInputValue, setTouchDrumOffsetXInputValue] = useState('0');
   const [touchDrumOffsetYInputValue, setTouchDrumOffsetYInputValue] = useState('0');
   const [touchDrumScaleInputValue, setTouchDrumScaleInputValue] = useState('100');
+  const [touchDrumLandscapeOffsetXInputValue, setTouchDrumLandscapeOffsetXInputValue] = useState('0');
+  const [touchDrumLandscapeOffsetYInputValue, setTouchDrumLandscapeOffsetYInputValue] = useState('0');
+  const [touchDrumLandscapeScaleInputValue, setTouchDrumLandscapeScaleInputValue] = useState('100');
   const [touchBottomDeadzoneInputValue, setTouchBottomDeadzoneInputValue] = useState('100');
   const [hideTouchBottomDeadzoneMaskInputValue, setHideTouchBottomDeadzoneMaskInputValue] = useState(false);
   const [showDriftMonitorInputValue, setShowDriftMonitorInputValue] = useState(false);
@@ -387,6 +411,54 @@ function PracticeModePage() {
   const [scrollSpeedInputValue, setScrollSpeedInputValue] = useState('1');
   const [courseInputValue, setCourseInputValue] = useState('');
   const [branchInputValue, setBranchInputValue] = useState('master');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const isFullscreenRef = useRef(false);
+
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        try {
+          await screen.orientation.lock('landscape');
+        } catch (_) { /* orientation lock not supported */ }
+        isFullscreenRef.current = true;
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen();
+        try {
+          screen.orientation.unlock();
+        } catch (_) { /* orientation unlock not supported */ }
+        isFullscreenRef.current = false;
+        setIsFullscreen(false);
+      }
+    } catch (_) { /* fullscreen not supported */ }
+  }, []);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const fs = Boolean(document.fullscreenElement);
+      isFullscreenRef.current = fs;
+      setIsFullscreen(fs);
+      if (!fs) {
+        try { screen.orientation.unlock(); } catch (_) { /* noop */ }
+        if (canvasRef.current) {
+          canvasRef.current.style.height = '';
+        }
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden && document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+        try { screen.orientation.unlock(); } catch (_) { /* noop */ }
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
 
   const stopLoop = useCallback(() => {
     if (rafRef.current) {
@@ -550,6 +622,9 @@ function PracticeModePage() {
     setTouchDrumOffsetXInputValue(String(touchDrumOffsetX));
     setTouchDrumOffsetYInputValue(String(touchDrumOffsetY));
     setTouchDrumScaleInputValue(String(touchDrumScalePercent));
+    setTouchDrumLandscapeOffsetXInputValue(String(touchDrumLandscapeOffsetX));
+    setTouchDrumLandscapeOffsetYInputValue(String(touchDrumLandscapeOffsetY));
+    setTouchDrumLandscapeScaleInputValue(String(touchDrumLandscapeScalePercent));
     setTouchBottomDeadzoneInputValue(String(touchBottomDeadzonePx));
     setHideTouchBottomDeadzoneMaskInputValue(isTouchBottomDeadzoneMaskHidden);
     setShowDriftMonitorInputValue(isDriftMonitorVisible);
@@ -559,6 +634,9 @@ function PracticeModePage() {
     touchDrumOffsetX,
     touchDrumOffsetY,
     touchDrumScalePercent,
+    touchDrumLandscapeOffsetX,
+    touchDrumLandscapeOffsetY,
+    touchDrumLandscapeScalePercent,
     touchBottomDeadzonePx,
     isTouchBottomDeadzoneMaskHidden,
     isDriftMonitorVisible,
@@ -714,15 +792,24 @@ function PracticeModePage() {
     const parsedOffsetX = Number.parseFloat(String(touchDrumOffsetXInputValue || '0'));
     const parsedOffsetY = Number.parseFloat(String(touchDrumOffsetYInputValue || '0'));
     const parsedScale = Number.parseFloat(String(touchDrumScaleInputValue || '100'));
+    const parsedLandscapeOffsetX = Number.parseFloat(String(touchDrumLandscapeOffsetXInputValue || '0'));
+    const parsedLandscapeOffsetY = Number.parseFloat(String(touchDrumLandscapeOffsetYInputValue || '0'));
+    const parsedLandscapeScale = Number.parseFloat(String(touchDrumLandscapeScaleInputValue || '100'));
     const parsedDeadzone = Number.parseFloat(String(touchBottomDeadzoneInputValue || '100'));
-    const safeOffsetX = Number.isFinite(parsedOffsetX) ? Math.max(-300, Math.min(300, parsedOffsetX)) : 0;
-    const safeOffsetY = Number.isFinite(parsedOffsetY) ? Math.max(-300, Math.min(300, parsedOffsetY)) : 0;
-    const safeScale = Number.isFinite(parsedScale) ? Math.max(10, Math.min(500, parsedScale)) : 100;
+    const safeOffsetX = Number.isFinite(parsedOffsetX) ? parsedOffsetX : 0;
+    const safeOffsetY = Number.isFinite(parsedOffsetY) ? parsedOffsetY : 0;
+    const safeScale = Number.isFinite(parsedScale) ? Math.max(10, parsedScale) : 100;
+    const safeLandscapeOffsetX = Number.isFinite(parsedLandscapeOffsetX) ? parsedLandscapeOffsetX : 0;
+    const safeLandscapeOffsetY = Number.isFinite(parsedLandscapeOffsetY) ? parsedLandscapeOffsetY : 0;
+    const safeLandscapeScale = Number.isFinite(parsedLandscapeScale) ? Math.max(10, parsedLandscapeScale) : 100;
     const safeBottomDeadzone = Number.isFinite(parsedDeadzone) ? Math.max(0, Math.min(400, parsedDeadzone)) : 100;
     setTouchAudioLatencyCompensationMs(safeValue);
     setTouchDrumOffsetX(safeOffsetX);
     setTouchDrumOffsetY(safeOffsetY);
     setTouchDrumScalePercent(safeScale);
+    setTouchDrumLandscapeOffsetX(safeLandscapeOffsetX);
+    setTouchDrumLandscapeOffsetY(safeLandscapeOffsetY);
+    setTouchDrumLandscapeScalePercent(safeLandscapeScale);
     setTouchBottomDeadzonePx(safeBottomDeadzone);
     setIsTouchBottomDeadzoneMaskHidden(hideTouchBottomDeadzoneMaskInputValue);
     setIsDriftMonitorVisible(showDriftMonitorInputValue);
@@ -731,6 +818,9 @@ function PracticeModePage() {
       window.localStorage.setItem(PRACTICE_TOUCH_DRUM_OFFSET_X_STORAGE_KEY, String(safeOffsetX));
       window.localStorage.setItem(PRACTICE_TOUCH_DRUM_OFFSET_Y_STORAGE_KEY, String(safeOffsetY));
       window.localStorage.setItem(PRACTICE_TOUCH_DRUM_SCALE_STORAGE_KEY, String(safeScale));
+      window.localStorage.setItem(PRACTICE_TOUCH_DRUM_LANDSCAPE_OFFSET_X_STORAGE_KEY, String(safeLandscapeOffsetX));
+      window.localStorage.setItem(PRACTICE_TOUCH_DRUM_LANDSCAPE_OFFSET_Y_STORAGE_KEY, String(safeLandscapeOffsetY));
+      window.localStorage.setItem(PRACTICE_TOUCH_DRUM_LANDSCAPE_SCALE_STORAGE_KEY, String(safeLandscapeScale));
       window.localStorage.setItem(PRACTICE_TOUCH_BOTTOM_DEADZONE_STORAGE_KEY, String(safeBottomDeadzone));
       window.localStorage.setItem(
         PRACTICE_TOUCH_BOTTOM_DEADZONE_MASK_HIDDEN_STORAGE_KEY,
@@ -747,6 +837,9 @@ function PracticeModePage() {
     touchDrumOffsetXInputValue,
     touchDrumOffsetYInputValue,
     touchDrumScaleInputValue,
+    touchDrumLandscapeOffsetXInputValue,
+    touchDrumLandscapeOffsetYInputValue,
+    touchDrumLandscapeScaleInputValue,
     touchBottomDeadzoneInputValue,
     hideTouchBottomDeadzoneMaskInputValue,
     showDriftMonitorInputValue
@@ -2444,6 +2537,10 @@ function PracticeModePage() {
   const getTouchArcGeometry = useCallback((zoneWidth, zoneHeight) => {
     const width = Math.max(1, zoneWidth);
     const height = Math.max(1, zoneHeight);
+    const isLandscape = isFullscreenRef.current;
+    const offsetX = isLandscape ? touchDrumLandscapeOffsetX : touchDrumOffsetX;
+    const offsetY = isLandscape ? touchDrumLandscapeOffsetY : touchDrumOffsetY;
+    const scalePercent = isLandscape ? touchDrumLandscapeScalePercent : touchDrumScalePercent;
     // Keep the drum centered in the lower touch zone and leave clear whitespace around it.
     const visualPadding = 18;
     const pulseScaleSafety = 1.05;
@@ -2451,17 +2548,17 @@ function PracticeModePage() {
     const defaultSafeRadiusByWidth = (width / 2 - visualPadding - outerEffectSafety) / pulseScaleSafety;
     const defaultSafeRadiusByHeight = (height / 2 - visualPadding - outerEffectSafety) / pulseScaleSafety;
     const baseRadius = Math.max(24, Math.min(width * 0.32, height * 0.42, defaultSafeRadiusByWidth, defaultSafeRadiusByHeight));
-    const centerX = Math.max(0, Math.min(width, width / 2 + touchDrumOffsetX));
-    const centerY = Math.max(0, Math.min(height, height / 2 + touchDrumOffsetY));
+    const centerX = Math.max(0, Math.min(width, width / 2 + offsetX));
+    const centerY = Math.max(0, Math.min(height, height / 2 + offsetY));
 
-    const scaledRadius = baseRadius * (touchDrumScalePercent / 100);
+    const scaledRadius = baseRadius * (scalePercent / 100);
     const arcRadius = Math.max(8, scaledRadius);
     return {
       centerX,
       centerY,
       radius: arcRadius
     };
-  }, [touchDrumOffsetX, touchDrumOffsetY, touchDrumScalePercent]);
+  }, [touchDrumOffsetX, touchDrumOffsetY, touchDrumScalePercent, touchDrumLandscapeOffsetX, touchDrumLandscapeOffsetY, touchDrumLandscapeScalePercent]);
 
   const triggerInputFeedback = useCallback((inputType) => {
     const now = performance.now();
@@ -2506,10 +2603,15 @@ function PracticeModePage() {
       event.clientY <= touchCanvasRect.bottom
     );
     if (!isInsideTouchZone) {
+      if (isFullscreenRef.current) {
+        event.preventDefault();
+        triggerInputFeedback('ka');
+      }
       return;
     }
 
-    const deadzoneTopClientY = touchCanvasRect.bottom - touchBottomDeadzonePx;
+    const effectiveDeadzonePx = isFullscreenRef.current ? 0 : touchBottomDeadzonePx;
+    const deadzoneTopClientY = touchCanvasRect.bottom - effectiveDeadzonePx;
     if (event.clientY >= deadzoneTopClientY) {
       event.preventDefault();
       return;
@@ -2525,7 +2627,7 @@ function PracticeModePage() {
     const zoneY = localY - zoneOffsetY;
 
     const arc = getTouchArcGeometry(touchCanvasRect.width, touchCanvasRect.height);
-    const deadzoneTop = Math.max(0, touchCanvasRect.height - touchBottomDeadzonePx);
+    const deadzoneTop = Math.max(0, touchCanvasRect.height - effectiveDeadzonePx);
     if (zoneY >= deadzoneTop) {
       event.preventDefault();
       return;
@@ -2899,7 +3001,7 @@ function PracticeModePage() {
     ctx.save();
     ctx.scale(dpr, dpr);
 
-    const statusBarHeight = 66;
+    const statusBarHeight = isFullscreenRef.current ? 36 : 66;
     const progressAreaHeight = 32;
     const baseLaneTop = statusBarHeight;
     const baseLaneBottom = Math.max(baseLaneTop + 120, height - progressAreaHeight);
@@ -2940,20 +3042,29 @@ function PracticeModePage() {
     const laneHeight = Math.min(baseLaneHeight * laneHeightScale, maxLaneHeight);
     const laneBottom = laneTop + laneHeight;
     const laneY = laneTop + Math.floor(laneHeight / 2);
-    const laneShrinkGap = Math.max(0, baseLaneBottom - laneBottom);
+    const laneShrinkGap = isFullscreenRef.current ? 0 : Math.max(0, baseLaneBottom - laneBottom);
     const frameWrap = canvas.parentElement;
     if (frameWrap) {
       frameWrap.style.setProperty('--practice-lane-shrink-gap', `${laneShrinkGap}px`);
     }
-    const noteJudgeOutlineWidth = baseOutlineWidth * rowWidthScale;
-    const dynamicSmallRadius = baseSmallRadius * rowWidthScale;
-    const dynamicBigRadius = baseBigRadius * rowWidthScale;
+    if (isFullscreenRef.current) {
+      const usedHeight = laneBottom + progressAreaHeight;
+      canvas.style.height = `${usedHeight}px`;
+    }
+    const verticalPadding = 12;
+    const maxNoteScaleByHeight = baseBigRadius > 0
+      ? Math.max(0.15, (laneHeight - verticalPadding) / (2 * baseBigRadius))
+      : 1;
+    const noteScale = Math.min(rowWidthScale, maxNoteScaleByHeight);
+    const noteJudgeOutlineWidth = baseOutlineWidth * noteScale;
+    const dynamicSmallRadius = baseSmallRadius * noteScale;
+    const dynamicBigRadius = baseBigRadius * noteScale;
     const dynamicJudgeSmallRadius = dynamicSmallRadius;
     const dynamicJudgeBigRadius = dynamicBigRadius;
     const smallNoteWhiteRingWidth = dynamicSmallRadius * 0.11;
     const smallNoteCoreRadius = (dynamicSmallRadius - noteJudgeOutlineWidth - smallNoteWhiteRingWidth) * noteCoreScale;
-    const leftPanelPadding = Math.max(12, Math.round(baseLeftPanelPadding * rowWidthScale));
-    const desiredDrumOuterRadius = dynamicJudgeBigRadius + Math.max(8, Math.round(14 * rowWidthScale));
+    const leftPanelPadding = Math.max(12, Math.round(baseLeftPanelPadding * noteScale));
+    const desiredDrumOuterRadius = dynamicJudgeBigRadius + Math.max(8, Math.round(14 * noteScale));
     const drumAreaRight = stackOrangeAboveLane ? 0 : rawDrumAreaRight * rowWidthScale;
     const laneClipLeft = stackOrangeAboveLane ? 0 : Math.min(width - 1, drumAreaRight);
     const laneDisplayWidth = laneFlyInRealWidth * rowWidthScale;
@@ -2972,18 +3083,18 @@ function PracticeModePage() {
       Math.min(laneClipRight - dynamicJudgeBigRadius - 8, judgeXBaseScaled + laneShift)
     );
     const drumVerticalPadding = stackOrangeAboveLane
-      ? Math.max(7, Math.round(9 * rowWidthScale))
+      ? Math.max(7, Math.round(9 * noteScale))
       : 0;
-    const minOuterRadius = Math.max(14, Math.round(36 * rowWidthScale));
+    const minOuterRadius = Math.max(14, Math.round(36 * noteScale));
     const maxOuterRadiusByPanel = stackOrangeAboveLane
       ? Math.max(Math.round(minOuterRadius * 0.75), Math.floor(topOrangeHeight * 0.44))
       : Math.max(Math.round(minOuterRadius * 0.75), Math.floor((drumAreaRight - leftPanelPadding * 2) / 2));
     const maxOuterRadiusByTopBand = stackOrangeAboveLane
       ? Math.max(10, Math.floor(topOrangeUsableHeight / 2) - drumVerticalPadding)
-      : Number.POSITIVE_INFINITY;
+      : Math.max(10, Math.floor(laneHeight / 2) - 4);
     const drumOuterRadius = stackOrangeAboveLane
       ? Math.max(10, Math.min(desiredDrumOuterRadius * 0.9, maxOuterRadiusByPanel, maxOuterRadiusByTopBand))
-      : Math.max(minOuterRadius, Math.min(desiredDrumOuterRadius, maxOuterRadiusByPanel));
+      : Math.max(10, Math.min(desiredDrumOuterRadius, maxOuterRadiusByPanel, maxOuterRadiusByTopBand));
     const minCenterX = leftPanelPadding + drumOuterRadius;
     const maxCenterX = stackOrangeAboveLane
       ? Math.max(minCenterX, width - leftPanelPadding - drumOuterRadius)
@@ -2994,9 +3105,9 @@ function PracticeModePage() {
     const drumCenterY = stackOrangeAboveLane
       ? topOrangeUsableTop + Math.floor(topOrangeUsableHeight / 2)
       : laneY;
-    const minRimThickness = Math.max(3, Math.round(8 * rowWidthScale));
+    const minRimThickness = Math.max(3, Math.round(8 * noteScale));
     const drumRimThickness = Math.max(minRimThickness, Math.floor(drumOuterRadius * 0.16));
-    const minInnerRadius = Math.max(8, Math.round(22 * rowWidthScale));
+    const minInnerRadius = Math.max(8, Math.round(22 * noteScale));
     const drumInnerRadius = Math.max(minInnerRadius, drumOuterRadius - drumRimThickness);
     const drawStreakOnDrum = () => {
       if (streakHits < 10) return;
@@ -3162,7 +3273,7 @@ function PracticeModePage() {
 
     // Thin separator between rim and face.
     ctx.strokeStyle = 'rgba(69, 76, 88, 0.85)';
-    ctx.lineWidth = Math.max(0.8, 1.5 * rowWidthScale);
+    ctx.lineWidth = Math.max(0.8, 1.5 * noteScale);
     ctx.beginPath();
     ctx.arc(drumCenterX, drumCenterY, drumInnerRadius + 0.75, 0, Math.PI * 2);
     ctx.stroke();
@@ -3172,7 +3283,7 @@ function PracticeModePage() {
     }
 
     ctx.strokeStyle = '#1f2633';
-    ctx.lineWidth = Math.max(1, 4 * rowWidthScale);
+    ctx.lineWidth = Math.max(1, 4 * noteScale);
     ctx.beginPath();
     ctx.arc(drumCenterX, drumCenterY, drumOuterRadius, 0, Math.PI * 2);
     ctx.stroke();
@@ -3391,7 +3502,7 @@ function PracticeModePage() {
       const textProgress = Math.max(0, Math.min(1, elapsed / JUDGE_FEEDBACK_MS));
       const fastPhase = 0.42;
       const holdPhase = 0.26;
-      const topEdgeY = Math.max(8, Math.round(18 * rowWidthScale));
+      const topEdgeY = Math.max(8, Math.round(18 * noteScale));
 
       let riseProgress;
       if (textProgress <= fastPhase) {
@@ -3418,8 +3529,8 @@ function PracticeModePage() {
       const riseDistance = dynamicJudgeBigRadius * 1.56;
       const textX = judgeX;
       const baseFontSize = judgeFx.fontSize || (judgeFx.text === '不可' ? 40 : 42);
-      const fontSize = baseFontSize * rowWidthScale;
-      const topSafeY = Math.max(topEdgeY, fontSize * textScale * 0.62 + Math.round(8 * rowWidthScale));
+      const fontSize = baseFontSize * noteScale;
+      const topSafeY = Math.max(topEdgeY, fontSize * textScale * 0.62 + Math.round(8 * noteScale));
       const textY = Math.max(topSafeY, laneY - riseDistance * riseProgress);
 
       ctx.save();
@@ -3431,7 +3542,7 @@ function PracticeModePage() {
       ctx.lineJoin = 'round';
       ctx.miterLimit = 2;
       ctx.font = `900 ${fontSize}px "Microsoft YaHei", "Noto Sans SC", sans-serif`;
-      const popupGap = Math.max(8, Math.round(12 * rowWidthScale));
+      const popupGap = Math.max(8, Math.round(12 * noteScale));
       const mainText = judgeFx.text;
       const hasDeltaText = Boolean(judgeFx.deltaText);
       const mainMetrics = ctx.measureText(mainText);
@@ -3447,20 +3558,20 @@ function PracticeModePage() {
         const deltaX = mainWidth / 2 + popupGap + deltaWidth / 2;
 
         ctx.font = `900 ${fontSize}px "Microsoft YaHei", "Noto Sans SC", sans-serif`;
-        ctx.lineWidth = 6 * rowWidthScale;
+        ctx.lineWidth = 6 * noteScale;
         ctx.strokeStyle = judgeFx.stroke;
         ctx.strokeText(mainText, mainX, 0);
         ctx.fillStyle = judgeFx.fill;
         ctx.fillText(mainText, mainX, 0);
 
         ctx.font = deltaFont;
-        ctx.lineWidth = Math.max(4, 5 * rowWidthScale);
+        ctx.lineWidth = Math.max(4, 5 * noteScale);
         ctx.strokeStyle = judgeFx.deltaStroke || '#2a3342';
         ctx.strokeText(judgeFx.deltaText, deltaX, 0);
         ctx.fillStyle = judgeFx.deltaFill || '#ffffff';
         ctx.fillText(judgeFx.deltaText, deltaX, 0);
       } else {
-        ctx.lineWidth = 6 * rowWidthScale;
+        ctx.lineWidth = 6 * noteScale;
         ctx.strokeStyle = judgeFx.stroke;
         ctx.strokeText(mainText, 0, 0);
         ctx.fillStyle = judgeFx.fill;
@@ -3780,7 +3891,7 @@ function PracticeModePage() {
 
         guideCtx.restore();
 
-        if (!isTouchBottomDeadzoneMaskHidden && touchBottomDeadzonePx > 0) {
+        if (!isFullscreenRef.current && !isTouchBottomDeadzoneMaskHidden && touchBottomDeadzonePx > 0) {
           const deadzoneTop = Math.max(0, guideHeight - touchBottomDeadzonePx);
           const deadzoneHeight = Math.max(0, guideHeight - deadzoneTop);
           if (deadzoneHeight > 0.5) {
@@ -3923,8 +4034,8 @@ function PracticeModePage() {
   const mainPlaybackDisabled = !notes.length && !isPlaying;
 
   return (
-    <div className="results-panel practice-panel">
-      <PracticeBreadcrumb />
+    <div className={`results-panel practice-panel${isFullscreen ? ' practice-fullscreen' : ''}`}>
+      {!isFullscreen && <PracticeBreadcrumb />}
 
       <div className="table-wrapper practice-wrapper">
         <PracticeToolbar
@@ -3941,6 +4052,8 @@ function PracticeModePage() {
           onOpenResultDialog={openResultDialog}
           onOpenSpeedDialog={openSpeedDialog}
           onOpenSettings={openSettingsDialog}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
         />
 
         <Dialog open={isResultDialogOpen} onOpenChange={handleResultDialogOpenChange}>
@@ -4068,39 +4181,84 @@ function PracticeModePage() {
                   </div>
 
                   <div className="practice-setting-item">
-                    <label className="practice-setting-label" htmlFor="practice-drum-offset-x-input">鼓面位置 X 偏移</label>
-                    <Input
-                      id="practice-drum-offset-x-input"
-                      type="number"
-                      value={touchDrumOffsetXInputValue}
-                      onChange={(_, data) => setTouchDrumOffsetXInputValue(String(data?.value ?? ''))}
-                      contentAfter="px"
-                    />
-                    <p className="practice-setting-help">只移动位置，不改变大小。默认 0，范围 -300 到 300。当前：{touchDrumOffsetX}px</p>
+                    <label className="practice-setting-label">鼓面位置 X 偏移</label>
+                    <div className="practice-setting-row">
+                      <div className="practice-setting-col">
+                        <span className="practice-setting-col-label">竖屏</span>
+                        <Input
+                          id="practice-drum-offset-x-input"
+                          type="number"
+                          value={touchDrumOffsetXInputValue}
+                          onChange={(_, data) => setTouchDrumOffsetXInputValue(String(data?.value ?? ''))}
+                          contentAfter="px"
+                        />
+                      </div>
+                      <div className="practice-setting-col">
+                        <span className="practice-setting-col-label">横屏</span>
+                        <Input
+                          id="practice-drum-landscape-offset-x-input"
+                          type="number"
+                          value={touchDrumLandscapeOffsetXInputValue}
+                          onChange={(_, data) => setTouchDrumLandscapeOffsetXInputValue(String(data?.value ?? ''))}
+                          contentAfter="px"
+                        />
+                      </div>
+                    </div>
+                    <p className="practice-setting-help">只移动位置，不改变大小。默认 0，无范围限制。</p>
                   </div>
 
                   <div className="practice-setting-item">
-                    <label className="practice-setting-label" htmlFor="practice-drum-offset-y-input">鼓面位置 Y 偏移</label>
-                    <Input
-                      id="practice-drum-offset-y-input"
-                      type="number"
-                      value={touchDrumOffsetYInputValue}
-                      onChange={(_, data) => setTouchDrumOffsetYInputValue(String(data?.value ?? ''))}
-                      contentAfter="px"
-                    />
-                    <p className="practice-setting-help">只移动位置，不改变大小。默认 0，范围 -300 到 300。当前：{touchDrumOffsetY}px</p>
+                    <label className="practice-setting-label">鼓面位置 Y 偏移</label>
+                    <div className="practice-setting-row">
+                      <div className="practice-setting-col">
+                        <span className="practice-setting-col-label">竖屏</span>
+                        <Input
+                          id="practice-drum-offset-y-input"
+                          type="number"
+                          value={touchDrumOffsetYInputValue}
+                          onChange={(_, data) => setTouchDrumOffsetYInputValue(String(data?.value ?? ''))}
+                          contentAfter="px"
+                        />
+                      </div>
+                      <div className="practice-setting-col">
+                        <span className="practice-setting-col-label">横屏</span>
+                        <Input
+                          id="practice-drum-landscape-offset-y-input"
+                          type="number"
+                          value={touchDrumLandscapeOffsetYInputValue}
+                          onChange={(_, data) => setTouchDrumLandscapeOffsetYInputValue(String(data?.value ?? ''))}
+                          contentAfter="px"
+                        />
+                      </div>
+                    </div>
+                    <p className="practice-setting-help">只移动位置，不改变大小。默认 0，无范围限制。</p>
                   </div>
 
                   <div className="practice-setting-item">
-                    <label className="practice-setting-label" htmlFor="practice-drum-scale-input">鼓面缩放</label>
-                    <Input
-                      id="practice-drum-scale-input"
-                      type="number"
-                      value={touchDrumScaleInputValue}
-                      onChange={(_, data) => setTouchDrumScaleInputValue(String(data?.value ?? ''))}
-                      contentAfter="%"
-                    />
-                    <p className="practice-setting-help">仅控制大小。默认 100%，范围 10% 到 500%。当前：{touchDrumScalePercent}%</p>
+                    <label className="practice-setting-label">鼓面缩放</label>
+                    <div className="practice-setting-row">
+                      <div className="practice-setting-col">
+                        <span className="practice-setting-col-label">竖屏</span>
+                        <Input
+                          id="practice-drum-scale-input"
+                          type="number"
+                          value={touchDrumScaleInputValue}
+                          onChange={(_, data) => setTouchDrumScaleInputValue(String(data?.value ?? ''))}
+                          contentAfter="%"
+                        />
+                      </div>
+                      <div className="practice-setting-col">
+                        <span className="practice-setting-col-label">横屏</span>
+                        <Input
+                          id="practice-drum-landscape-scale-input"
+                          type="number"
+                          value={touchDrumLandscapeScaleInputValue}
+                          onChange={(_, data) => setTouchDrumLandscapeScaleInputValue(String(data?.value ?? ''))}
+                          contentAfter="%"
+                        />
+                      </div>
+                    </div>
+                    <p className="practice-setting-help">仅控制大小。默认 100%，最小 10%，无上限。</p>
                   </div>
 
                   <div className="practice-setting-item">
