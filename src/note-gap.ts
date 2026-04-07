@@ -1,3 +1,11 @@
+/**
+ * 部分代码引用自 TJAAnalyzer (https://github.com/jack9966qk/TJAAnalyzer)
+ * Copyright (c) 2026 jackq
+ * Licensed under the MIT License.
+ * SPDX-License-Identifier: MIT
+ *
+ * 注：原始版权声明与许可文本未作删改。
+ */
 import { RENDERABLE_NOTES, JUDGEABLE_NOTES } from '../TJARenderer/src/primitives.ts';
 import type { ParsedChart } from '../TJARenderer/src/tja-parser.ts';
 import { getEffectiveBpm } from '../TJARenderer/src/tja-parser.ts';
@@ -33,10 +41,12 @@ function getGapSegments(
   const currentRatio = currentParams.measureRatio;
   const currentBpm = getEffectiveBpm(currentParams, currentCharIdx);
 
+  if (requireJudgeable && !JUDGEABLE_NOTES.includes(currentBar[currentCharIdx])) return null;
+
   // Check within current bar
   for (let i = currentCharIdx - 1; i >= 0; i--) {
     if (RENDERABLE_NOTES.includes(currentBar[i])) {
-      if (requireJudgeable && !JUDGEABLE_NOTES.includes(currentBar[i])) return null;
+      if (requireJudgeable && !JUDGEABLE_NOTES.includes(currentBar[i])) continue;
       const fraction = ((currentCharIdx - i) / currentTotal) * currentRatio;
       return [{ fraction, bpm: getEffectiveBpm(currentParams, i) }];
     }
@@ -64,7 +74,7 @@ function getGapSegments(
 
     for (let i = prevTotal - 1; i >= 0; i--) {
       if (RENDERABLE_NOTES.includes(prevBar[i])) {
-        if (requireJudgeable && !JUDGEABLE_NOTES.includes(prevBar[i])) return null;
+        if (requireJudgeable && !JUDGEABLE_NOTES.includes(prevBar[i])) continue;
         const distInPrev = ((prevTotal - i) / prevTotal) * prevRatio;
         const candidateTotal = totalMeasures + distInPrev;
         if (maxMeasures !== undefined && candidateTotal > maxMeasures + 0.0001) return null;
