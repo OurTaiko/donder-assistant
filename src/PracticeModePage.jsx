@@ -92,6 +92,9 @@ const DRIFT_BASELINE_WARMUP_MS = 160;
 const DRIFT_BASELINE_WINDOW_MS = 2200;
 const DRIFT_BASELINE_MIN_SAMPLES = 12;
 const DRIFT_BASELINE_ADAPT_FACTOR = 0.1;
+const HAND_SPEED_SAMPLE_COUNT = 3;
+const HAND_SPEED_SEQUENCE_RESET_MS = 800;
+const HAND_SPEED_DISPLAY_RESET_MS = 1400;
 
 const COURSE_LABEL_MAP = {
   edit: '魔王里',
@@ -109,6 +112,30 @@ const BRANCH_LABEL_MAP = {
 
 function roundToTwo(value) {
   return Math.round(value * 100) / 100;
+}
+
+function computeHandSpeedBpmFromTapTimes(tapTimes) {
+  if (!Array.isArray(tapTimes) || tapTimes.length < HAND_SPEED_SAMPLE_COUNT) {
+    return null;
+  }
+
+  const intervals = [];
+  for (let i = 1; i < tapTimes.length; i += 1) {
+    const deltaMs = tapTimes[i] - tapTimes[i - 1];
+    if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
+      return null;
+    }
+    intervals.push(deltaMs);
+  }
+
+  if (!intervals.length) return null;
+
+  const averageIntervalMs = intervals.reduce((sum, value) => sum + value, 0) / intervals.length;
+  if (!Number.isFinite(averageIntervalMs) || averageIntervalMs <= 0) {
+    return null;
+  }
+
+  return Math.round(60000 / (averageIntervalMs * 4));
 }
 
 function PracticeModePage() {
@@ -148,6 +175,8 @@ function PracticeModePage() {
   const driftResidualIntegralMsRef = useRef(0);
   const driftLastAudioElapsedMsRef = useRef(-1);
   const driftPersistentCorrectionMsRef = useRef(0);
+  const handSpeedTapTimesRef = useRef([]);
+  const handSpeedResetTimerRef = useRef(0);
 
   const [, setStatusText] = useState('准备就绪：导入本地 TJA 后点击开始。按键：F/J=咚，D/K=咔。');
   const [songTitle, setSongTitle] = useState('');
@@ -176,6 +205,7 @@ function PracticeModePage() {
   const [audioMimeType, setAudioMimeType] = useState('');
   const [hitFxTick, setHitFxTick] = useState(0);
   const [clockDriftMs, setClockDriftMs] = useState(0);
+  const [handSpeedBpm, setHandSpeedBpm] = useState(null);
   const [globalSpeedMultiplier, setGlobalSpeedMultiplier] = useState(() => {
     if (typeof window === 'undefined') return 1;
     const raw = window.localStorage.getItem(PRACTICE_GLOBAL_SPEED_MULTIPLIER_STORAGE_KEY);
@@ -265,6 +295,38 @@ function PracticeModePage() {
     }
   }, []);
 
+  const clearHandSpeed = useCallback(() => {
+    handSpeedTapTimesRef.current = [];
+    if (handSpeedResetTimerRef.current) {
+      window.clearTimeout(handSpeedResetTimerRef.current);
+      handSpeedResetTimerRef.current = 0;
+    }
+    setHandSpeedBpm(null);
+  }, []);
+
+  const scheduleHandSpeedReset = useCallback(() => {
+    if (handSpeedResetTimerRef.current) {
+      window.clearTimeout(handSpeedResetTimerRef.current);
+    }
+    handSpeedResetTimerRef.current = window.setTimeout(() => {
+      handSpeedTapTimesRef.current = [];
+      handSpeedResetTimerRef.current = 0;
+      setHandSpeedBpm(null);
+    }, HAND_SPEED_DISPLAY_RESET_MS);
+  }, []);
+
+  const registerHandSpeedTap = useCallback((tapAtMs) => {
+    const previousTimes = handSpeedTapTimesRef.current;
+    const lastTapAtMs = previousTimes[previousTimes.length - 1];
+    const nextTimes = !Number.isFinite(lastTapAtMs) || tapAtMs - lastTapAtMs > HAND_SPEED_SEQUENCE_RESET_MS
+      ? [tapAtMs]
+      : [...previousTimes, tapAtMs].slice(-HAND_SPEED_SAMPLE_COUNT);
+
+    handSpeedTapTimesRef.current = nextTimes;
+    setHandSpeedBpm(computeHandSpeedBpmFromTapTimes(nextTimes));
+    scheduleHandSpeedReset();
+  }, [scheduleHandSpeedReset]);
+
   const pauseAudioPlayback = useCallback(() => {
     if (audioStartTimerRef.current) {
       window.clearTimeout(audioStartTimerRef.current);
@@ -314,10 +376,11 @@ function PracticeModePage() {
     driftResidualIntegralMsRef.current = 0;
     driftLastAudioElapsedMsRef.current = -1;
     driftPersistentCorrectionMsRef.current = 0;
+    clearHandSpeed();
     setClockDriftMs(0);
     setHitFxTick((prev) => prev + 1);
     setStatusText('已重置，点击开始进行练习。');
-  }, [stopLoop, stopAudioPlayback]);
+  }, [clearHandSpeed, stopLoop, stopAudioPlayback]);
 
   const pauseForDialogOpen = useCallback(() => {
     if (!isPlaying) return;
@@ -1002,6 +1065,7 @@ function PracticeModePage() {
       driftResidualIntegralMsRef.current = 0;
       driftLastAudioElapsedMsRef.current = -1;
       driftPersistentCorrectionMsRef.current = 0;
+      clearHandSpeed();
       return;
     }
 
@@ -1031,7 +1095,8 @@ function PracticeModePage() {
     driftResidualIntegralMsRef.current = 0;
     driftLastAudioElapsedMsRef.current = -1;
     driftPersistentCorrectionMsRef.current = 0;
-  }, [chartStartOffsetMs]);
+    clearHandSpeed();
+  }, [chartStartOffsetMs, clearHandSpeed]);
 
   const getCurrentChartTimeMs = useCallback(() => {
     const nowPerf = performance.now();
@@ -1477,6 +1542,7 @@ function PracticeModePage() {
       balloonFxRef.current = [];
       hitNoteFxRef.current = [];
       touchGuidePulseRef.current = [];
+      clearHandSpeed();
       setHitFxTick((prev) => prev + 1);
       pendingResetAfterSeekRef.current = false;
     }
@@ -1485,7 +1551,7 @@ function PracticeModePage() {
     if (isPaused) {
       setStatusText(`已暂停：已跳转到${step > 0 ? '下一' : '上一'}小节。`);
     }
-  }, [notes.length, chartStartOffsetMs, barLines, durationMs, isPlaying, isPaused, getCurrentChartTimeMs, nowMs, seekToChartTime]);
+  }, [clearHandSpeed, notes.length, chartStartOffsetMs, barLines, durationMs, isPlaying, isPaused, getCurrentChartTimeMs, nowMs, seekToChartTime]);
 
   const handleInput = useCallback((inputType) => {
     if (!isPlaying) return;
@@ -1578,8 +1644,10 @@ function PracticeModePage() {
   }, [touchDrumOffsetX, touchDrumOffsetY, touchDrumScalePercent]);
 
   const triggerInputFeedback = useCallback((inputType) => {
+    const now = performance.now();
+    registerHandSpeedTap(now);
+
     if (!isPlaying) {
-      const now = performance.now();
       touchGuidePulseRef.current = [
         ...touchGuidePulseRef.current.filter((pulse) => now - pulse.time <= TOUCH_GUIDE_VIBRATION_MS),
         { time: now, type: inputType }
@@ -1595,7 +1663,6 @@ function PracticeModePage() {
       return;
     }
 
-    const now = performance.now();
     touchGuidePulseRef.current = [
       ...touchGuidePulseRef.current.filter((pulse) => now - pulse.time <= TOUCH_GUIDE_VIBRATION_MS),
       { time: now, type: inputType }
@@ -1603,7 +1670,7 @@ function PracticeModePage() {
     pushHitFlash(inputType);
     void playInputSfx(inputType);
     handleInput(inputType);
-  }, [isPlaying, isPaused, notes.length, resumePlayback, startPlayback, pushHitFlash, playInputSfx, handleInput]);
+  }, [isPlaying, isPaused, notes.length, registerHandSpeedTap, resumePlayback, startPlayback, pushHitFlash, playInputSfx, handleInput]);
 
   const handlePracticePointerDown = useCallback((event) => {
     const frame = event.currentTarget;
@@ -1698,6 +1765,10 @@ function PracticeModePage() {
         sfxReverbSendRef.current = null;
         sfxNoiseBufferRef.current = null;
       }
+      if (handSpeedResetTimerRef.current) {
+        window.clearTimeout(handSpeedResetTimerRef.current);
+        handSpeedResetTimerRef.current = 0;
+      }
     };
   }, [stopLoop, stopAudioPlayback, replaceAudioObjectUrl]);
 
@@ -1778,6 +1849,7 @@ function PracticeModePage() {
     driftResidualIntegralMsRef.current = 0;
     driftLastAudioElapsedMsRef.current = -1;
     driftPersistentCorrectionMsRef.current = 0;
+    clearHandSpeed();
     setRollBalloonHits(0);
     setStreakHits(0);
     setDurationMs(timeline.durationMs);
@@ -1786,7 +1858,7 @@ function PracticeModePage() {
 
     const audioHint = audioBlob ? '，已加载音频' : '，未找到音频';
     setStatusText(`导入成功：${timeline.notes.length} 个可判定音符${audioHint}。点击开始即可游玩。`);
-  }, [replaceAudioObjectUrl]);
+  }, [clearHandSpeed, replaceAudioObjectUrl]);
 
   const importFromZip = useCallback(async (zipFile) => {
     const zip = await JSZip.loadAsync(await zipFile.arrayBuffer());
@@ -2142,10 +2214,15 @@ function PracticeModePage() {
     const progressText = totalBars > 0
       ? `${progressPercent}%  ${currentBar}/${totalBars} 小节`
       : `${progressPercent}%  -/- 小节`;
+    const handSpeedText = handSpeedBpm != null
+      ? `手速 ${handSpeedBpm} BPM`
+      : '手速 -- BPM';
     const driftText = Number.isFinite(clockDriftMs)
       ? `延迟 ${clockDriftMs > 0 ? '+' : ''}${clockDriftMs}ms`
       : '延迟 --ms';
-    const laneInfoText = isDriftMonitorVisible ? driftText : '';
+    const laneInfoText = isDriftMonitorVisible
+      ? `${handSpeedText}  ${driftText}`
+      : handSpeedText;
 
     ctx.fillStyle = '#b83a10';
     if (stackOrangeAboveLane) {
@@ -2987,6 +3064,7 @@ function PracticeModePage() {
     globalSpeedMultiplier,
     scrollSpeedMultiplier,
     clockDriftMs,
+    handSpeedBpm,
     isDriftMonitorVisible,
     isPlaying,
     isPaused,
