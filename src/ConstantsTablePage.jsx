@@ -8,10 +8,8 @@ import {
   Body1,
   Spinner
 } from '@fluentui/react-components';
-import { VirtualizerScrollView } from '@fluentui/react-virtualizer';
 
 let constantsCache = null;
-const ROW_HEIGHT = 44;
 const MIN_NON_FIRST_COL_WIDTH = 120;
 const CONSTANT_COLUMN_NAME_SET = new Set(['主定数', '总定数', '定数', '体力', '手速', '爆发', '节奏', '复合']);
 let textMeasureContext = null;
@@ -153,56 +151,47 @@ const ConstantsVirtualList = memo(function ConstantsVirtualList({
       </div>
       {filteredRows.length === 0 ? (
         <div className="constants-virtual-scroll-root" aria-label="空列表">
-          <div className="constants-virtual-scroll-container" />
+          <div className="constants-loading-wrap">
+            <Body1>没有匹配的数据</Body1>
+          </div>
         </div>
       ) : (
-        <VirtualizerScrollView
-          className="constants-virtual-scroll-root"
-          container={{ className: 'constants-virtual-scroll-container' }}
-          numItems={filteredRows.length}
-          itemSize={ROW_HEIGHT}
-          axis="vertical"
-        >
-          {(index) => {
-            const item = filteredRows[index];
-            if (!item) return null;
-
-            return (
-              <div key={item.id} className="constants-row constants-virtual-row" role="row" onClick={() => openDetail(item)}>
-                {headers.map((header, columnIndex) => (
-                  <div
-                    key={`${item.id}-${header.key}`}
-                    role="gridcell"
-                    aria-colindex={columnIndex + 1}
-                    className={`${columnIndex === 0 ? 'sticky-first-col-cell' : ''} constants-virtual-cell`.trim()}
-                    style={columnStyles[columnIndex]}
-                  >
-                    {columnIndex === categoryColumnIndex ? (
-                      <span className={`constants-category-badge ${getCategoryBadgeClass(item.cells[columnIndex])}`.trim()}>
-                        {item.cells[columnIndex] || '-'}
-                      </span>
-                    ) : columnIndex === difficultyColumnIndex ? (
-                      <span className={`constants-cell-text constants-difficulty-text ${getDifficultyTextClass(item.cells[columnIndex])}`.trim()}>
-                        {item.cells[columnIndex] || '-'}
-                      </span>
-                    ) : columnIndex === branchColumnIndex ? (
-                      <span className={`constants-branch-text ${getBranchTextClass(item.cells[columnIndex])}`.trim()}>
-                        {item.cells[columnIndex] || '-'}
-                      </span>
-                    ) : constantColumnIndexes.has(columnIndex) ? (
-                      <span className={`constants-cell-text constants-value-text ${getConstantValueToneClass(item.cells[columnIndex])}`.trim()}>
-                        {item.cells[columnIndex] || '-'}
-                      </span>
-                    ) : (
-                      <span className="constants-cell-text">{item.cells[columnIndex] || '-'}</span>
-                    )}
-                  </div>
-                ))}
-                <div className="constants-virtual-row-spacer constants-virtual-body-spacer" aria-hidden="true" />
-              </div>
-            );
-          }}
-        </VirtualizerScrollView>
+        <div className="constants-virtual-scroll-root" aria-label="定数列表">
+          {filteredRows.map((item) => (
+            <div key={item.id} className="constants-row constants-virtual-row" role="row" onClick={() => openDetail(item)}>
+              {headers.map((header, columnIndex) => (
+                <div
+                  key={`${item.id}-${header.key}`}
+                  role="gridcell"
+                  aria-colindex={columnIndex + 1}
+                  className={`${columnIndex === 0 ? 'sticky-first-col-cell' : ''} constants-virtual-cell`.trim()}
+                  style={columnStyles[columnIndex]}
+                >
+                  {columnIndex === categoryColumnIndex ? (
+                    <span className={`constants-category-badge ${getCategoryBadgeClass(item.cells[columnIndex])}`.trim()}>
+                      {item.cells[columnIndex] || '-'}
+                    </span>
+                  ) : columnIndex === difficultyColumnIndex ? (
+                    <span className={`constants-cell-text constants-difficulty-text ${getDifficultyTextClass(item.cells[columnIndex])}`.trim()}>
+                      {item.cells[columnIndex] || '-'}
+                    </span>
+                  ) : columnIndex === branchColumnIndex ? (
+                    <span className={`constants-branch-text ${getBranchTextClass(item.cells[columnIndex])}`.trim()}>
+                      {item.cells[columnIndex] || '-'}
+                    </span>
+                  ) : constantColumnIndexes.has(columnIndex) ? (
+                    <span className={`constants-cell-text constants-value-text ${getConstantValueToneClass(item.cells[columnIndex])}`.trim()}>
+                      {item.cells[columnIndex] || '-'}
+                    </span>
+                  ) : (
+                    <span className="constants-cell-text">{item.cells[columnIndex] || '-'}</span>
+                  )}
+                </div>
+              ))}
+              <div className="constants-virtual-row-spacer constants-virtual-body-spacer" aria-hidden="true" />
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

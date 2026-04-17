@@ -633,9 +633,7 @@ body {
   --song-col-width: 220px;
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
-  height: 100%;
-  min-height: 0;
+  flex: 1 0 auto;
 }
 
 .constants-virtual-header {
@@ -715,6 +713,7 @@ body {
 .constants-virtual-header-cell.sticky-first-col-header {
   position: sticky;
   left: 0;
+  top: 0;
   z-index: 11;
   background: linear-gradient(180deg, #fff0e1 0%, #ffe1c6 100%);
   box-shadow: 1px 0 0 #efc19d;
@@ -876,21 +875,15 @@ body {
 }
 
 .constants-virtual-scroll-root {
-  flex: 1 1 auto;
-  min-height: 0;
   width: max-content;
   min-width: 100%;
-}
-
-.constants-virtual-scroll-container {
-  height: auto;
-  overflow: visible !important;
 }
 
 /* Sticky first-column fallback for virtualized constants grid. */
 .constants-virtual-grid [role='columnheader'][aria-colindex='1'] {
   position: sticky !important;
   left: 0 !important;
+  top: 0 !important;
   z-index: 12 !important;
   background: linear-gradient(180deg, #fff0e1 0%, #ffe1c6 100%) !important;
   box-shadow: 1px 0 0 #efc19d;
@@ -1649,6 +1642,7 @@ body {
 .analysis-virtual-header-cell.sticky-first-col-header {
   position: sticky;
   left: 0;
+  top: 0;
   z-index: 11;
   background: linear-gradient(180deg, #fff0e1 0%, #ffe1c6 100%);
   box-shadow: 1px 0 0 #efc19d;
@@ -1681,6 +1675,7 @@ body {
 .analysis-virtual-grid [role='columnheader'][aria-colindex='1'] {
   position: sticky !important;
   left: 0 !important;
+  top: 0 !important;
   z-index: 12 !important;
   background: linear-gradient(180deg, #fff0e1 0%, #ffe1c6 100%) !important;
   box-shadow: 1px 0 0 #efc19d;
