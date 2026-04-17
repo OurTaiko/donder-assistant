@@ -96,8 +96,31 @@ function formatScore(value) {
   return value.toFixed(2);
 }
 
+function getHeaderCellValue(detail, headerNames) {
+  const headers = Array.isArray(detail?.headers) ? detail.headers : [];
+  const cells = Array.isArray(detail?.cells) ? detail.cells : [];
+  if (!headers.length || !cells.length) return '';
+
+  const normalizedHeaders = headers.map((header) => String(header || '').replace(/\s*\(\d+\)$/, '').trim());
+  for (let nameIndex = 0; nameIndex < headerNames.length; nameIndex += 1) {
+    const target = headerNames[nameIndex];
+    for (let index = normalizedHeaders.length - 1; index >= 0; index -= 1) {
+      if (normalizedHeaders[index] === target) {
+        return String(cells[index] || '').trim();
+      }
+    }
+  }
+  return '';
+}
+
 function ConstantsDetailPage({ detail, onBack }) {
   const dimensions = detail?.dimensions || [];
+  const fallbackTotalRaw = getHeaderCellValue(detail, ['主定数', '总定数', '定数']);
+  const totalConstantRaw = String(detail?.totalConstantRaw || '').trim() || fallbackTotalRaw;
+  const totalConstantNumber = Number.isFinite(detail?.totalConstant) ? detail.totalConstant : Number(totalConstantRaw);
+  const totalConstantText = Number.isFinite(totalConstantNumber)
+    ? formatScore(totalConstantNumber)
+    : (totalConstantRaw || '-');
 
   const chartModel = useMemo(() => {
     if (!dimensions.length) {
@@ -216,7 +239,11 @@ function ConstantsDetailPage({ detail, onBack }) {
             </div>
 
             <div className="constants-detail-score-list">
-              <h3 className="constants-detail-card-title">五维数值</h3>
+              <h3 className="constants-detail-card-title">定数</h3>
+              <div className="constants-score-item constants-score-item-main" aria-label="主定数">
+                <span className="constants-score-name">主定数</span>
+                <span className="constants-score-value">{totalConstantText}</span>
+              </div>
               {dimensions.map((dimension) => (
                 <div className="constants-score-item" key={dimension.name}>
                   <span className="constants-score-name">{dimension.name}</span>
@@ -227,7 +254,7 @@ function ConstantsDetailPage({ detail, onBack }) {
           </div>
 
           <div className="constants-detail-radar-card">
-            <h3 className="constants-detail-card-title">五维雷达图</h3>
+            <h3 className="constants-detail-card-title">定数可视化</h3>
             {chartModel ? (
               <svg className="constants-radar-svg" viewBox="0 0 420 420" role="img" aria-label="定数五维雷达图">
                 {chartModel.levelPolygons.map((polygon, index) => (

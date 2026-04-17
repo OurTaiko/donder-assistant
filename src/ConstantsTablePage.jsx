@@ -210,6 +210,17 @@ function findLastColumnIndex(headers, baseName) {
   return -1;
 }
 
+function findLastColumnIndexByNames(headers, names) {
+  for (let nameIndex = 0; nameIndex < names.length; nameIndex += 1) {
+    const target = names[nameIndex];
+    const found = findLastColumnIndex(headers, target);
+    if (found >= 0) {
+      return found;
+    }
+  }
+  return -1;
+}
+
 function getBranchSortRank(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized) return 99;
@@ -451,6 +462,11 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
     const categoryIndex = findLastColumnIndex(headers, '分类');
     const difficultyIndex = findLastColumnIndex(headers, '难度');
     const branchIndex = findLastColumnIndex(headers, '分支');
+    const totalConstantIndex = findLastColumnIndexByNames(headers, ['主定数', '总定数', '定数']);
+    const totalConstantRaw = totalConstantIndex >= 0
+      ? row.cells[totalConstantIndex]
+      : (row.cells[row.cells.length - 1] || '');
+    const totalConstantValue = getNumericValue(totalConstantRaw);
 
     const dimensionNames = ['体力', '手速', '爆发', '节奏', '复合'];
     const dimensions = dimensionNames.map((name) => {
@@ -470,6 +486,8 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
       category: categoryIndex >= 0 ? row.cells[categoryIndex] : '',
       difficulty: difficultyIndex >= 0 ? row.cells[difficultyIndex] : '',
       branch: branchIndex >= 0 ? row.cells[branchIndex] : '',
+      totalConstantRaw,
+      totalConstant: totalConstantValue,
       dimensions,
       cells: row.cells,
       headers: headers.map((header) => header.label)
