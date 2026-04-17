@@ -744,6 +744,35 @@ body {
   overflow: hidden;
 }
 
+.constants-value-text {
+  font-weight: 700;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.constants-value-text.constants-value-extreme {
+  color: #d62f2f;
+}
+
+.constants-value-text.constants-value-step-1 { color: #237c34; }
+.constants-value-text.constants-value-step-2 { color: #33862f; }
+.constants-value-text.constants-value-step-3 { color: #438e2b; }
+.constants-value-text.constants-value-step-4 { color: #559629; }
+.constants-value-text.constants-value-step-5 { color: #689c28; }
+.constants-value-text.constants-value-step-6 { color: #7aa028; }
+.constants-value-text.constants-value-step-7 { color: #899f26; }
+.constants-value-text.constants-value-step-8 { color: #969b24; }
+.constants-value-text.constants-value-step-9 { color: #a39423; }
+.constants-value-text.constants-value-step-10 { color: #b18a23; }
+.constants-value-text.constants-value-step-11 { color: #c07b24; }
+.constants-value-text.constants-value-step-12 { color: #ca6926; }
+.constants-value-text.constants-value-step-13 { color: #cc5628; }
+.constants-value-text.constants-value-step-14 { color: #c74329; }
+.constants-value-text.constants-value-step-15 { color: #bc3228; }
+
+.constants-value-text.constants-value-zero {
+  color: #98a2b3;
+}
+
 .constants-category-badge {
   display: inline-flex;
   align-items: center;

@@ -13,6 +13,7 @@ import { VirtualizerScrollView } from '@fluentui/react-virtualizer';
 let constantsCache = null;
 const ROW_HEIGHT = 44;
 const MIN_NON_FIRST_COL_WIDTH = 120;
+const CONSTANT_COLUMN_NAME_SET = new Set(['主定数', '总定数', '定数', '体力', '手速', '爆发', '节奏', '复合']);
 let textMeasureContext = null;
 
 function estimateTextPixelWidth(text, font) {
@@ -106,10 +107,21 @@ function getDifficultyTextClass(difficulty) {
   return '';
 }
 
+function getConstantValueToneClass(value) {
+  const numericValue = getNumericValue(value);
+  if (numericValue === null) return '';
+  if (numericValue <= 0) return 'constants-value-zero';
+  if (numericValue >= 15) return 'constants-value-extreme';
+
+  const step = Math.max(1, Math.min(15, Math.ceil(numericValue)));
+  return `constants-value-step-${step}`;
+}
+
 const ConstantsVirtualList = memo(function ConstantsVirtualList({
   headers,
   filteredRows,
   columnStyles,
+  constantColumnIndexes,
   categoryColumnIndex,
   difficultyColumnIndex,
   branchColumnIndex,
@@ -175,6 +187,10 @@ const ConstantsVirtualList = memo(function ConstantsVirtualList({
                       </span>
                     ) : columnIndex === branchColumnIndex ? (
                       <span className={`constants-branch-text ${getBranchTextClass(item.cells[columnIndex])}`.trim()}>
+                        {item.cells[columnIndex] || '-'}
+                      </span>
+                    ) : constantColumnIndexes.has(columnIndex) ? (
+                      <span className={`constants-cell-text constants-value-text ${getConstantValueToneClass(item.cells[columnIndex])}`.trim()}>
                         {item.cells[columnIndex] || '-'}
                       </span>
                     ) : (
@@ -391,6 +407,16 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
   const categoryColumnIndex = useMemo(() => findLastColumnIndex(headers, '分类'), [headers]);
   const difficultyColumnIndex = useMemo(() => findLastColumnIndex(headers, '难度'), [headers]);
   const branchColumnIndex = useMemo(() => findLastColumnIndex(headers, '分支'), [headers]);
+  const constantColumnIndexes = useMemo(() => {
+    const result = new Set();
+    for (let index = 0; index < headers.length; index += 1) {
+      const baseName = getHeaderBaseName(headers[index]?.label);
+      if (CONSTANT_COLUMN_NAME_SET.has(baseName)) {
+        result.add(index);
+      }
+    }
+    return result;
+  }, [headers]);
 
   const columnStyles = useMemo(() => {
     if (!headers.length) return [];
@@ -528,6 +554,7 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
               headers={headers}
               filteredRows={filteredRows}
               columnStyles={columnStyles}
+              constantColumnIndexes={constantColumnIndexes}
               categoryColumnIndex={categoryColumnIndex}
               difficultyColumnIndex={difficultyColumnIndex}
               branchColumnIndex={branchColumnIndex}
