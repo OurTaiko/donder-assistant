@@ -684,6 +684,19 @@ async function hashText(text) {
 }
 
 const ANALYSIS_ROW_HEIGHT = 44;
+const MOBILE_LIST_MEDIA_QUERY = '(max-width: 640px)';
+
+function clampListScale(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.min(1, Math.max(0.4, numeric));
+}
+
+function getTouchDistance(touchA, touchB) {
+  const dx = touchA.clientX - touchB.clientX;
+  const dy = touchA.clientY - touchB.clientY;
+  return Math.hypot(dx, dy);
+}
 
 function App() {
   const location = useLocation();
@@ -693,6 +706,9 @@ function App() {
   const footerRef = useRef(null);
   const filterPanelRef = useRef(null);
   const searchDebounceTimerRef = useRef(null);
+  const analysisTableWrapperRef = useRef(null);
+  const analysisListScaleRef = useRef(1);
+  const analysisZoomRefreshTimerRef = useRef(null);
   const [allSongsData, setAllSongsData] = useState([]);
   const [allResults, setAllResults] = useState([]);
   const [currentRows, setCurrentRows] = useState([]);
@@ -716,6 +732,12 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [hideTopBarTitle, setHideTopBarTitle] = useState(false);
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia(MOBILE_LIST_MEDIA_QUERY).matches;
+  });
+  const [analysisListScale, setAnalysisListScale] = useState(1);
+  const [analysisZoomRevision, setAnalysisZoomRevision] = useState(0);
   const [constantsVisibleCount, setConstantsVisibleCount] = useState(0);
   const [constantsTotalCount, setConstantsTotalCount] = useState(0);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -740,10 +762,123 @@ function App() {
   }, [routeSearchKeyword]);
 
   useEffect(() => {
+    analysisListScaleRef.current = analysisListScale;
+  }, [analysisListScale]);
+
+  const applyAnalysisListScale = useCallback((nextScale) => {
+    analysisListScaleRef.current = nextScale;
+    setAnalysisListScale(nextScale);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+
+    const mediaQuery = window.matchMedia(MOBILE_LIST_MEDIA_QUERY);
+    const handleMediaQueryChange = (event) => {
+      setIsNarrowViewport(event.matches);
+      if (!event.matches) {
+        applyAnalysisListScale(1);
+      }
+    };
+
+    setIsNarrowViewport(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleMediaQueryChange);
+    return () => {
+      mediaQuery.removeEventListener('change', handleMediaQueryChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const wrapper = analysisTableWrapperRef.current;
+    const isAnalysisPage = location.pathname === '/analysis';
+    if (!wrapper || !isNarrowViewport || !isAnalysisPage) return undefined;
+
+    const pinchState = {
+      active: false,
+      startDistance: 0,
+      startScale: 1
+    };
+
+    const onTouchStart = (event) => {
+      if (event.touches.length !== 2) return;
+      pinchState.active = true;
+      pinchState.startDistance = getTouchDistance(event.touches[0], event.touches[1]);
+      pinchState.startScale = analysisListScaleRef.current;
+    };
+
+    const onTouchMove = (event) => {
+      if (!pinchState.active || event.touches.length !== 2) return;
+
+      const distance = getTouchDistance(event.touches[0], event.touches[1]);
+      if (distance <= 0 || pinchState.startDistance <= 0) return;
+
+      event.preventDefault();
+      const ratio = distance / pinchState.startDistance;
+      const nextScale = clampListScale(pinchState.startScale * ratio);
+      if (Math.abs(nextScale - analysisListScaleRef.current) < 0.01) return;
+      applyAnalysisListScale(nextScale);
+    };
+
+    const onTouchEnd = (event) => {
+      if (event.touches.length < 2) {
+        pinchState.active = false;
+      }
+    };
+
+    const onWheel = (event) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const delta = -event.deltaY * 0.002;
+      const nextScale = clampListScale(analysisListScaleRef.current + delta);
+      if (Math.abs(nextScale - analysisListScaleRef.current) < 0.001) return;
+      applyAnalysisListScale(nextScale);
+    };
+
+    wrapper.addEventListener('touchstart', onTouchStart, { passive: true });
+    wrapper.addEventListener('touchmove', onTouchMove, { passive: false });
+    wrapper.addEventListener('touchend', onTouchEnd, { passive: true });
+    wrapper.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    wrapper.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      wrapper.removeEventListener('touchstart', onTouchStart);
+      wrapper.removeEventListener('touchmove', onTouchMove);
+      wrapper.removeEventListener('touchend', onTouchEnd);
+      wrapper.removeEventListener('touchcancel', onTouchEnd);
+      wrapper.removeEventListener('wheel', onWheel);
+    };
+  }, [isNarrowViewport, location.pathname, allResults.length, applyAnalysisListScale]);
+
+  useEffect(() => {
+    if (analysisZoomRefreshTimerRef.current) {
+      window.clearTimeout(analysisZoomRefreshTimerRef.current);
+      analysisZoomRefreshTimerRef.current = null;
+    }
+
+    if (!isNarrowViewport) return undefined;
+
+    analysisZoomRefreshTimerRef.current = window.setTimeout(() => {
+      analysisZoomRefreshTimerRef.current = null;
+      setAnalysisZoomRevision((value) => value + 1);
+    }, 300);
+
+    return () => {
+      if (analysisZoomRefreshTimerRef.current) {
+        window.clearTimeout(analysisZoomRefreshTimerRef.current);
+        analysisZoomRefreshTimerRef.current = null;
+      }
+    };
+  }, [analysisListScale, isNarrowViewport]);
+
+  useEffect(() => {
     return () => {
       if (searchDebounceTimerRef.current) {
         window.clearTimeout(searchDebounceTimerRef.current);
         searchDebounceTimerRef.current = null;
+      }
+      if (analysisZoomRefreshTimerRef.current) {
+        window.clearTimeout(analysisZoomRefreshTimerRef.current);
+        analysisZoomRefreshTimerRef.current = null;
       }
     };
   }, []);
@@ -1647,6 +1782,9 @@ function App() {
     return 'analysis';
   }, [isAboutRoute, isTargetScoreRoute, isPracticeRoute, isSinglePriceRoute, isConstantsRoute, isConstantsDetailRoute]);
 
+  const analysisEffectiveScale = isNarrowViewport ? analysisListScale : 1;
+  const analysisItemSize = Math.max(1, Math.round(ANALYSIS_ROW_HEIGHT * analysisEffectiveScale));
+
   const openConstantsDetail = useCallback((detail) => {
     if (!detail?.id) return;
     navigate({
@@ -1842,63 +1980,75 @@ function App() {
                 <Body1 className="hint">支持 .TJA 谱面，兼容任意目录结构</Body1>
               </div>
             ) : (
-              <div className="analysis-table-wrapper table-wrapper">
-                <div className="table-grid analysis-virtual-grid" role="table" aria-label="谱面分析表格">
-                  <div className="analysis-virtual-header" role="rowgroup">
-                    <div className="analysis-virtual-header-row" role="row">
-                      {analysisColumns.map((column, columnIndex) => (
-                        <div
-                          key={column.id}
-                          role="columnheader"
-                          aria-colindex={columnIndex + 1}
-                          onClick={() => onSort(column.id)}
-                          className={`${column.sortable ? 'sortable' : ''} ${column.headerClassName || ''} analysis-virtual-cell analysis-virtual-header-cell`.trim()}
-                          style={column.style}
-                        >
-                          <span className="header-cell-text">
-                            <span className="header-title-text">{column.label}</span>
-                            {column.sortable ? <span className="sort-indicator">{sortIndicator(column.id)}</span> : null}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {filteredRows.length === 0 ? (
-                    <div className="analysis-virtual-scroll-root" aria-label="空列表">
-                      <div className="analysis-virtual-scroll-container" />
-                    </div>
-                  ) : (
-                    <VirtualizerScrollView
-                      className="analysis-virtual-scroll-root"
-                      container={{ className: 'analysis-virtual-scroll-container' }}
-                      numItems={filteredRows.length}
-                      itemSize={ANALYSIS_ROW_HEIGHT}
-                      axis="vertical"
-                    >
-                      {(index) => {
-                        const item = filteredRows[index];
-                        if (!item) return null;
-
-                        return (
-                          <div key={item.id} className="result-row analysis-virtual-row" role="row" onClick={() => openChartDetailPage(item)}>
-                            {analysisColumns.map((column, columnIndex) => (
-                              <div
-                                key={`${item.id}-${column.id}`}
-                                role="gridcell"
-                                aria-colindex={columnIndex + 1}
-                                className={`${column.className || ''} analysis-virtual-cell`.trim()}
-                                style={column.style}
-                              >
-                                {column.id === 'favorite'
-                                  ? column.renderCell(item)
-                                  : <span className="analysis-cell-text">{column.renderCell(item)}</span>}
-                              </div>
-                            ))}
+              <div
+                className={`analysis-table-wrapper table-wrapper${isNarrowViewport ? ' list-local-zoom-enabled' : ''}`}
+                ref={analysisTableWrapperRef}
+              >
+                <div
+                  className="list-local-zoom-surface"
+                  style={isNarrowViewport ? {
+                    '--list-local-zoom-scale': analysisListScale,
+                    '--analysis-row-height': `${analysisItemSize}px`
+                  } : undefined}
+                >
+                  <div className="table-grid analysis-virtual-grid" role="table" aria-label="谱面分析表格">
+                    <div className="analysis-virtual-header" role="rowgroup">
+                      <div className="analysis-virtual-header-row" role="row">
+                        {analysisColumns.map((column, columnIndex) => (
+                          <div
+                            key={column.id}
+                            role="columnheader"
+                            aria-colindex={columnIndex + 1}
+                            onClick={() => onSort(column.id)}
+                            className={`${column.sortable ? 'sortable' : ''} ${column.headerClassName || ''} analysis-virtual-cell analysis-virtual-header-cell`.trim()}
+                            style={column.style}
+                          >
+                            <span className="header-cell-text">
+                              <span className="header-title-text">{column.label}</span>
+                              {column.sortable ? <span className="sort-indicator">{sortIndicator(column.id)}</span> : null}
+                            </span>
                           </div>
-                        );
-                      }}
-                    </VirtualizerScrollView>
-                  )}
+                        ))}
+                      </div>
+                    </div>
+                    {filteredRows.length === 0 ? (
+                      <div className="analysis-virtual-scroll-root" aria-label="空列表">
+                        <div className="analysis-virtual-scroll-container" />
+                      </div>
+                    ) : (
+                      <VirtualizerScrollView
+                        key={`analysis-vlist-${analysisZoomRevision}`}
+                        className="analysis-virtual-scroll-root"
+                        container={{ className: 'analysis-virtual-scroll-container' }}
+                        numItems={filteredRows.length}
+                        itemSize={analysisItemSize}
+                        axis="vertical"
+                      >
+                        {(index) => {
+                          const item = filteredRows[index];
+                          if (!item) return null;
+
+                          return (
+                            <div key={item.id} className="result-row analysis-virtual-row" role="row" onClick={() => openChartDetailPage(item)}>
+                              {analysisColumns.map((column, columnIndex) => (
+                                <div
+                                  key={`${item.id}-${column.id}`}
+                                  role="gridcell"
+                                  aria-colindex={columnIndex + 1}
+                                  className={`${column.className || ''} analysis-virtual-cell`.trim()}
+                                  style={column.style}
+                                >
+                                  {column.id === 'favorite'
+                                    ? column.renderCell(item)
+                                    : <span className="analysis-cell-text">{column.renderCell(item)}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }}
+                      </VirtualizerScrollView>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1908,6 +2058,7 @@ function App() {
           <div className={`constants-route-panel${isConstantsRoute ? '' : ' route-panel-hidden'}`} aria-hidden={!isConstantsRoute}>
             <ConstantsTablePage
               searchKeyword={searchKeyword}
+              enableLocalZoom={isNarrowViewport}
               onCountChange={(visibleCount, totalCount) => {
                 setConstantsVisibleCount(visibleCount);
                 setConstantsTotalCount(typeof totalCount === 'number' ? totalCount : 0);

@@ -234,6 +234,18 @@ function findLastColumnIndexByNames(headers, names) {
   return -1;
 }
 
+function clampListScale(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.min(1, Math.max(0.4, numeric));
+}
+
+function getTouchDistance(touchA, touchB) {
+  const dx = touchA.clientX - touchB.clientX;
+  const dy = touchA.clientY - touchB.clientY;
+  return Math.hypot(dx, dy);
+}
+
 function getBranchSortRank(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized) return 99;
@@ -243,7 +255,7 @@ function getBranchSortRank(value) {
   return 98;
 }
 
-function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, isActive = false }) {
+function ConstantsTablePage({ searchKeyword = '', enableLocalZoom = false, onCountChange, onOpenDetail, isActive = false }) {
   const [isPending, startTransition] = useTransition();
   const [isListBusy, setIsListBusy] = useState(false);
   const [sortState, setSortState] = useState({ columnIndex: -1, asc: true });
@@ -256,8 +268,23 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
   const pendingTimerRef = useRef(0);
   const tableWrapperRef = useRef(null);
   const scrollUpdateRafRef = useRef(0);
+  const zoomRefreshTimerRef = useRef(0);
   const [virtualViewportHeight, setVirtualViewportHeight] = useState(0);
   const [virtualScrollTop, setVirtualScrollTop] = useState(0);
+  const [listZoomScale, setListZoomScale] = useState(1);
+  const [listZoomRevision, setListZoomRevision] = useState(0);
+  const listZoomScaleRef = useRef(1);
+  const effectiveListScale = enableLocalZoom ? listZoomScale : 1;
+  const rowHeight = Math.max(1, Math.round(ROW_HEIGHT * effectiveListScale));
+
+  const handleZoomWheelCapture = useCallback((event) => {
+    if (!enableLocalZoom || !isActive || !event.ctrlKey) return;
+    const delta = -event.deltaY * 0.002;
+    const nextScale = clampListScale(listZoomScaleRef.current + delta);
+    if (Math.abs(nextScale - listZoomScaleRef.current) < 0.001) return;
+    listZoomScaleRef.current = nextScale;
+    setListZoomScale(nextScale);
+  }, [enableLocalZoom, isActive]);
 
   const clearPendingSchedule = useCallback(() => {
     if (pendingRaf1Ref.current) {
@@ -318,8 +345,102 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
   }, [isPending, isListBusy]);
 
   useEffect(() => {
+    listZoomScaleRef.current = listZoomScale;
+  }, [listZoomScale]);
+
+  useEffect(() => {
+    if (!enableLocalZoom) {
+      listZoomScaleRef.current = 1;
+      setListZoomScale(1);
+      return undefined;
+    }
+
+    if (!isActive) {
+      return undefined;
+    }
+
+    const wrapper = tableWrapperRef.current;
+    if (!wrapper) return undefined;
+
+    const pinchState = {
+      active: false,
+      startDistance: 0,
+      startScale: 1
+    };
+
+    const onTouchStart = (event) => {
+      if (event.touches.length !== 2) return;
+      pinchState.active = true;
+      pinchState.startDistance = getTouchDistance(event.touches[0], event.touches[1]);
+      pinchState.startScale = listZoomScaleRef.current;
+    };
+
+    const onTouchMove = (event) => {
+      if (!pinchState.active || event.touches.length !== 2) return;
+
+      const distance = getTouchDistance(event.touches[0], event.touches[1]);
+      if (distance <= 0 || pinchState.startDistance <= 0) return;
+
+      event.preventDefault();
+      const ratio = distance / pinchState.startDistance;
+      const nextScale = clampListScale(pinchState.startScale * ratio);
+      if (Math.abs(nextScale - listZoomScaleRef.current) < 0.01) return;
+      listZoomScaleRef.current = nextScale;
+      setListZoomScale(nextScale);
+    };
+
+    const onTouchEnd = (event) => {
+      if (event.touches.length < 2) {
+        pinchState.active = false;
+      }
+    };
+
+    wrapper.addEventListener('touchstart', onTouchStart, { passive: true });
+    wrapper.addEventListener('touchmove', onTouchMove, { passive: false });
+    wrapper.addEventListener('touchend', onTouchEnd, { passive: true });
+    wrapper.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      wrapper.removeEventListener('touchstart', onTouchStart);
+      wrapper.removeEventListener('touchmove', onTouchMove);
+      wrapper.removeEventListener('touchend', onTouchEnd);
+      wrapper.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [enableLocalZoom, isActive]);
+
+  useEffect(() => {
+    if (zoomRefreshTimerRef.current) {
+      window.clearTimeout(zoomRefreshTimerRef.current);
+      zoomRefreshTimerRef.current = 0;
+    }
+
+    if (!enableLocalZoom) return undefined;
+
+    zoomRefreshTimerRef.current = window.setTimeout(() => {
+      zoomRefreshTimerRef.current = 0;
+      const wrapper = tableWrapperRef.current;
+      if (wrapper) {
+        setVirtualViewportHeight(wrapper.clientHeight);
+        setVirtualScrollTop(wrapper.scrollTop);
+      }
+      setListZoomRevision((value) => value + 1);
+    }, 300);
+
+    return () => {
+      if (zoomRefreshTimerRef.current) {
+        window.clearTimeout(zoomRefreshTimerRef.current);
+        zoomRefreshTimerRef.current = 0;
+      }
+    };
+  }, [listZoomScale, enableLocalZoom]);
+
+  useEffect(() => {
     return () => {
       clearPendingSchedule();
+      if (zoomRefreshTimerRef.current) {
+        window.clearTimeout(zoomRefreshTimerRef.current);
+        zoomRefreshTimerRef.current = 0;
+      }
     };
   }, [clearPendingSchedule]);
 
@@ -447,29 +568,29 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
       };
     }
 
-    const effectiveViewportHeight = Math.max(virtualViewportHeight, ROW_HEIGHT * 8);
-    const startIndex = Math.max(0, Math.floor(virtualScrollTop / ROW_HEIGHT) - VIRTUAL_OVERSCAN_ROWS);
+    const effectiveViewportHeight = Math.max(virtualViewportHeight, rowHeight * 8);
+    const startIndex = Math.max(0, Math.floor(virtualScrollTop / rowHeight) - VIRTUAL_OVERSCAN_ROWS);
     const endIndex = Math.min(
       filteredRows.length,
-      Math.ceil((virtualScrollTop + effectiveViewportHeight) / ROW_HEIGHT) + VIRTUAL_OVERSCAN_ROWS
+      Math.ceil((virtualScrollTop + effectiveViewportHeight) / rowHeight) + VIRTUAL_OVERSCAN_ROWS
     );
 
     return {
       visibleRows: filteredRows.slice(startIndex, endIndex),
-      topSpacerHeight: startIndex * ROW_HEIGHT,
-      bottomSpacerHeight: (filteredRows.length - endIndex) * ROW_HEIGHT
+      topSpacerHeight: startIndex * rowHeight,
+      bottomSpacerHeight: (filteredRows.length - endIndex) * rowHeight
     };
-  }, [filteredRows, virtualScrollTop, virtualViewportHeight]);
+  }, [filteredRows, virtualScrollTop, virtualViewportHeight, rowHeight]);
 
   useEffect(() => {
     const wrapper = tableWrapperRef.current;
     if (!wrapper) return;
-    const maxScrollTop = Math.max(0, (filteredRows.length * ROW_HEIGHT) - wrapper.clientHeight);
+    const maxScrollTop = Math.max(0, (filteredRows.length * rowHeight) - wrapper.clientHeight);
     if (wrapper.scrollTop > maxScrollTop) {
       wrapper.scrollTop = maxScrollTop;
       setVirtualScrollTop(maxScrollTop);
     }
-  }, [filteredRows.length]);
+  }, [filteredRows.length, rowHeight]);
 
   const categoryColumnIndex = useMemo(() => findLastColumnIndex(headers, '分类'), [headers]);
   const difficultyColumnIndex = useMemo(() => findLastColumnIndex(headers, '难度'), [headers]);
@@ -516,7 +637,8 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
 
       }
 
-      const width = `${Math.ceil(computedWidth)}px`;
+      const scaledWidth = Math.max(1, Math.ceil(computedWidth * effectiveListScale));
+      const width = `${scaledWidth}px`;
       return {
         width,
         minWidth: width,
@@ -526,7 +648,7 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
         flexShrink: 0
       };
     });
-  }, [headers, rows]);
+  }, [headers, rows, effectiveListScale]);
 
   useEffect(() => {
     if (isActive && typeof onCountChange === 'function') {
@@ -604,35 +726,49 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
 
       </header>
 
-      <div className="constants-table-wrapper table-wrapper" ref={tableWrapperRef} onScroll={handleTableWrapperScroll}>
-        {loadingState.loading ? (
-          <div className="constants-loading-wrap">
-            <Spinner size="large" label="正在解析定数表..." />
-          </div>
-        ) : null}
-        {loadingState.error ? (
-          <div className="constants-loading-wrap">
-            <Body1>{loadingState.error}</Body1>
-          </div>
-        ) : null}
-        {!loadingState.loading && !loadingState.error ? (
-          <>
-            <ConstantsVirtualList
-              headers={headers}
-              visibleRows={virtualRows.visibleRows}
-              topSpacerHeight={virtualRows.topSpacerHeight}
-              bottomSpacerHeight={virtualRows.bottomSpacerHeight}
-              columnStyles={columnStyles}
-              constantColumnIndexes={constantColumnIndexes}
-              categoryColumnIndex={categoryColumnIndex}
-              difficultyColumnIndex={difficultyColumnIndex}
-              branchColumnIndex={branchColumnIndex}
-              handleSort={handleSort}
-              renderSortIcon={renderSortIcon}
-              openDetail={openDetail}
-            />
-          </>
-        ) : null}
+      <div
+        className={`constants-table-wrapper table-wrapper${enableLocalZoom ? ' list-local-zoom-enabled' : ''}`}
+        ref={tableWrapperRef}
+        onScroll={handleTableWrapperScroll}
+        onWheelCapture={handleZoomWheelCapture}
+      >
+        <div
+          className="list-local-zoom-surface"
+          style={enableLocalZoom ? {
+            '--list-local-zoom-scale': listZoomScale,
+            '--constants-row-height': `${rowHeight}px`
+          } : undefined}
+        >
+          {loadingState.loading ? (
+            <div className="constants-loading-wrap">
+              <Spinner size="large" label="正在解析定数表..." />
+            </div>
+          ) : null}
+          {loadingState.error ? (
+            <div className="constants-loading-wrap">
+              <Body1>{loadingState.error}</Body1>
+            </div>
+          ) : null}
+          {!loadingState.loading && !loadingState.error ? (
+            <>
+              <ConstantsVirtualList
+                key={`constants-vlist-${listZoomRevision}`}
+                headers={headers}
+                visibleRows={virtualRows.visibleRows}
+                topSpacerHeight={virtualRows.topSpacerHeight}
+                bottomSpacerHeight={virtualRows.bottomSpacerHeight}
+                columnStyles={columnStyles}
+                constantColumnIndexes={constantColumnIndexes}
+                categoryColumnIndex={categoryColumnIndex}
+                difficultyColumnIndex={difficultyColumnIndex}
+                branchColumnIndex={branchColumnIndex}
+                handleSort={handleSort}
+                renderSortIcon={renderSortIcon}
+                openDetail={openDetail}
+              />
+            </>
+          ) : null}
+        </div>
         {!loadingState.loading && !loadingState.error && (isPending || isListBusy) ? (
           <div className="constants-list-busy-overlay" aria-live="polite" aria-label="列表更新中">
             <Spinner size="medium" label="更新列表中..." />
@@ -645,5 +781,6 @@ function ConstantsTablePage({ searchKeyword = '', onCountChange, onOpenDetail, i
 
 export default memo(ConstantsTablePage, (prevProps, nextProps) => {
   return prevProps.searchKeyword === nextProps.searchKeyword
+    && prevProps.enableLocalZoom === nextProps.enableLocalZoom
     && prevProps.isActive === nextProps.isActive;
 });
