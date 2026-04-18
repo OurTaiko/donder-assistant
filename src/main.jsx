@@ -692,6 +692,7 @@ function App() {
   const headerRef = useRef(null);
   const footerRef = useRef(null);
   const filterPanelRef = useRef(null);
+  const searchDebounceTimerRef = useRef(null);
   const [allSongsData, setAllSongsData] = useState([]);
   const [allResults, setAllResults] = useState([]);
   const [currentRows, setCurrentRows] = useState([]);
@@ -737,6 +738,15 @@ function App() {
     setSearchInput(routeSearchKeyword);
     setSearchKeyword(routeSearchKeyword);
   }, [routeSearchKeyword]);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceTimerRef.current) {
+        window.clearTimeout(searchDebounceTimerRef.current);
+        searchDebounceTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -1264,6 +1274,17 @@ function App() {
     navigate({ pathname: targetPath, search: search ? `?${search}` : '' }, { replace: Boolean(options.replace) });
   }
 
+  function scheduleCommitSearch(nextValue) {
+    if (searchDebounceTimerRef.current) {
+      window.clearTimeout(searchDebounceTimerRef.current);
+    }
+
+    searchDebounceTimerRef.current = window.setTimeout(() => {
+      searchDebounceTimerRef.current = null;
+      commitSearch(nextValue);
+    }, 300);
+  }
+
   function closeChartDetailPage() {
     if (location.pathname !== '/analysis') {
       navigate({ pathname: '/analysis', search: location.search });
@@ -1652,7 +1673,6 @@ function App() {
             {(isAnalysisRoute || isConstantsRoute) ? (
               <div className="actions-row">
                 <Input
-                  key={isConstantsRoute ? `constants-${routeSearchKeyword}` : 'analysis-search'}
                   className="search-input"
                   contentBefore={<SearchRegular />}
                   contentAfter={isConstantsRoute ? undefined : (
@@ -1693,16 +1713,18 @@ function App() {
                     </span>
                   )}
                   placeholder={isConstantsRoute ? '搜索定数表...' : '搜索歌曲...'}
-                  value={isConstantsRoute ? undefined : searchInput}
-                  defaultValue={isConstantsRoute ? routeSearchKeyword : undefined}
+                  value={searchInput}
                   onChange={(_, data) => {
-                    if (!isConstantsRoute) {
-                      setSearchInput(data.value);
-                    }
+                    setSearchInput(data.value);
+                    scheduleCommitSearch(data.value);
                   }}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                       event.preventDefault();
+                      if (searchDebounceTimerRef.current) {
+                        window.clearTimeout(searchDebounceTimerRef.current);
+                        searchDebounceTimerRef.current = null;
+                      }
                       commitSearch(event.currentTarget.value);
                     }
                   }}
