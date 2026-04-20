@@ -13,7 +13,6 @@ let constantsCache = null;
 const ROW_HEIGHT = 44;
 const VIRTUAL_OVERSCAN_ROWS = 10;
 const MIN_NON_FIRST_COL_WIDTH = 120;
-const CONSTANT_COLUMN_NAME_SET = new Set(['主定数', '总定数', '定数', '体力', '手速', '爆发', '节奏', '复合']);
 let textMeasureContext = null;
 
 function estimateTextPixelWidth(text, font) {
@@ -208,6 +207,25 @@ function getNumericValue(text) {
   if (!normalized) return null;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isLikelyNumericColumn(rows, columnIndex) {
+  const sampleCount = Math.min(rows.length, 800);
+  let nonEmptyCount = 0;
+  let numericCount = 0;
+
+  for (let rowIndex = 0; rowIndex < sampleCount; rowIndex += 1) {
+    const raw = String(rows[rowIndex]?.cells?.[columnIndex] || '').trim();
+    if (!raw || raw === '-') continue;
+
+    nonEmptyCount += 1;
+    if (getNumericValue(raw) !== null) {
+      numericCount += 1;
+    }
+  }
+
+  if (nonEmptyCount === 0) return false;
+  return numericCount / nonEmptyCount >= 0.9;
 }
 
 function getHeaderBaseName(headerLabel) {
@@ -598,13 +616,17 @@ function ConstantsTablePage({ searchKeyword = '', enableLocalZoom = false, onCou
   const constantColumnIndexes = useMemo(() => {
     const result = new Set();
     for (let index = 0; index < headers.length; index += 1) {
+      if (index === categoryColumnIndex || index === difficultyColumnIndex || index === branchColumnIndex) continue;
+
       const baseName = getHeaderBaseName(headers[index]?.label);
-      if (CONSTANT_COLUMN_NAME_SET.has(baseName)) {
+      if (baseName === '歌曲') continue;
+
+      if (isLikelyNumericColumn(rows, index)) {
         result.add(index);
       }
     }
     return result;
-  }, [headers]);
+  }, [headers, rows, categoryColumnIndex, difficultyColumnIndex, branchColumnIndex]);
 
   const columnStyles = useMemo(() => {
     if (!headers.length) return [];
